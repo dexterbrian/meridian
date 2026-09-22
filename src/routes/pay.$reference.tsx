@@ -23,13 +23,12 @@ export const Route = createFileRoute("/pay/$reference")({
       { title: "Pay a Meridian request (demo)" },
       {
         name: "description",
-        content:
-          "Settle a Meridian payment request. Demonstration only — no money is collected or moved.",
+        content: "Pay a Meridian payment request. Demo only. No money moves.",
       },
       { property: "og:title", content: "Pay a Meridian request (demo)" },
       {
         property: "og:description",
-        content: "The payer side of a Meridian payment request link.",
+        content: "The payer side of a Meridian payment link.",
       },
     ],
   }),
@@ -83,8 +82,8 @@ function PayRequest() {
         data: {
           to: payerEmail,
           subject: `Payment ${reference} sent to ${data.from_business}`,
-          heading: "Payment request settled",
-          intro: `This demo confirms your simulated payment of ${formatMoney(Number(data.amount), data.currency as Currency)} to ${data.from_business}.`,
+          heading: "Payment sent",
+          intro: `Demo confirmation of your simulated payment of ${formatMoney(Number(data.amount), data.currency as Currency)} to ${data.from_business}.`,
           rows: [
             { label: "Reference", value: reference },
             { label: "Paid to", value: data.from_business },
@@ -110,9 +109,7 @@ function PayRequest() {
 
   return (
     <div className="min-h-screen">
-      <DemoBanner>
-        Demo payment request — this page shows the payer experience. No money moves.
-      </DemoBanner>
+      <DemoBanner>Demo. This is what the payer sees. No money moves.</DemoBanner>
       <header className="border-b border-border/70 px-5 py-4">
         <div className="mx-auto flex max-w-3xl items-center justify-between">
           <Wordmark />
@@ -127,9 +124,9 @@ function PayRequest() {
           <p className="text-sm text-muted-foreground">Loading request…</p>
         ) : !data ? (
           <div className="panel p-8 text-center">
-            <h1 className="font-display text-2xl font-bold">Request not found</h1>
+            <h1 className="font-display text-2xl font-bold">Link not found</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              This payment link ({reference}) doesn't exist. Create a new one in the demo.
+              No payment request matches {reference}. Create one in the demo.
             </p>
             <Link
               to="/demo/request"
@@ -141,10 +138,10 @@ function PayRequest() {
         ) : data.status === "paid" ? (
           <div className="panel p-8 text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
-            <h1 className="mt-4 font-display text-2xl font-bold">Request settled</h1>
+            <h1 className="mt-4 font-display text-2xl font-bold">Paid</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               {formatMoney(Number(data.amount), data.currency as Currency)} sent to{" "}
-              {data.from_business}. Settled in 1 minute 52 seconds.
+              {data.from_business}.
             </p>
             <p className="mt-4 font-mono text-sm text-primary">{data.reference}</p>
             <Link
@@ -164,7 +161,7 @@ function PayRequest() {
                 {formatMoney(Number(data.amount), data.currency as Currency)}
               </h1>
               <p className="mt-2 text-sm text-muted-foreground">
-                {data.from_business} is requesting payment from {data.to_business}
+                From {data.from_business} to {data.to_business}
               </p>
               {data.memo && <p className="mt-1 text-sm">{data.memo}</p>}
               <p className="mt-3 font-mono text-xs text-primary">{data.reference}</p>
@@ -219,7 +216,7 @@ function PayRequest() {
                   : `Pay ${formatMoney(Number(data.amount), data.currency as Currency)}`}
               </button>
               <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                <ShieldCheck className="h-3.5 w-3.5" /> Simulated payment — nothing is charged.
+                <ShieldCheck className="h-3.5 w-3.5" /> Simulated payment. Nothing is charged.
               </p>
             </div>
           </div>

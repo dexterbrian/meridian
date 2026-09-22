@@ -21,16 +21,16 @@ import {
 export const Route = createFileRoute("/demo/send")({
   head: () => ({
     meta: [
-      { title: "Demo cross-border send — Meridian" },
+      { title: "Demo: pay a supplier abroad — Meridian" },
       {
         name: "description",
         content:
-          "Simulate paying a supplier in another African market with Meridian: live conversion, transparent fees and minutes-not-days settlement.",
+          "Simulate paying a supplier in another country with Meridian. Fees shown, conversion by our partner, payout in minutes.",
       },
-      { property: "og:title", content: "Demo cross-border send — Meridian" },
+      { property: "og:title", content: "Demo: pay a supplier abroad — Meridian" },
       {
         property: "og:description",
-        content: "Watch a cross-border business payment settle in minutes, cost fully itemised.",
+        content: "Watch a supplier payment settle in minutes with every fee itemised.",
       },
     ],
   }),
@@ -38,20 +38,20 @@ export const Route = createFileRoute("/demo/send")({
 });
 
 const STAGES = [
-  "Verifying recipient details",
+  "Checking recipient details",
   "Running compliance checks",
-  "Converting currency at mid-market + 0.35%",
-  "Instructing local payout",
+  "Converting with our partner",
+  "Sending local payout",
   "Settled",
 ];
 
 function SendDemo() {
   const notify = useServerFn(sendNotification);
-  const [from, setFrom] = useState<Currency>("NGN");
-  const [to, setTo] = useState<Currency>("GHS");
-  const [amount, setAmount] = useState(3200000);
+  const [from, setFrom] = useState<Currency>("KES");
+  const [to, setTo] = useState<Currency>("USD");
+  const [amount, setAmount] = useState(650000);
   const [payout, setPayout] = useState<PayMethod>("bank");
-  const [recipient, setRecipient] = useState("Accra Packaging Co.");
+  const [recipient, setRecipient] = useState("Shenzhen Tools Co.");
   const [email, setEmail] = useState("");
   const [stage, setStage] = useState(-1);
   const [done, setDone] = useState<{ reference: string } | null>(null);
@@ -85,8 +85,8 @@ function SendDemo() {
       data: {
         to: email,
         subject: `Transfer ${reference} settled — Meridian demo`,
-        heading: "Your transfer has settled",
-        intro: `This is a demo confirmation for a simulated transfer to ${recipient}. In the live product this lands in your inbox the moment the payout clears.`,
+        heading: "Transfer settled",
+        intro: `Demo confirmation for a simulated transfer to ${recipient}. In the live product this arrives the moment the payout clears.`,
         rows: [
           { label: "Reference", value: reference },
           { label: "Recipient", value: recipient },
@@ -106,7 +106,7 @@ function SendDemo() {
 
   return (
     <div className="min-h-screen">
-      <DemoBanner>Demo transfer — simulated end to end. No funds move.</DemoBanner>
+      <DemoBanner>Demo transfer. Simulated end to end. No funds move.</DemoBanner>
       <header className="border-b border-border/70 px-5 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <Wordmark />
@@ -124,10 +124,9 @@ function SendDemo() {
           <ArrowLeft className="h-4 w-4" /> Back to Meridian
         </Link>
 
-        <h1 className="mt-6 font-display text-3xl font-bold">Pay a business in another country</h1>
+        <h1 className="mt-6 font-display text-3xl font-bold">Pay a supplier abroad</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          This is the Meridian send flow. Choose a corridor, see exactly what it costs, and watch
-          the payment settle.
+          Pick the currencies, see the cost, watch it settle.
         </p>
 
         {done ? (
@@ -135,8 +134,8 @@ function SendDemo() {
             <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
             <h2 className="mt-4 font-display text-2xl font-bold">Transfer settled</h2>
             <p className="mt-2 text-sm text-muted-foreground">
-              {recipient} received {formatMoney(quote.recipientGets, to)} in 2 minutes 08 seconds. A
-              confirmation was emailed to {email}.
+              {recipient} received {formatMoney(quote.recipientGets, to)}. Confirmation sent to{" "}
+              {email}.
             </p>
             <p className="mt-4 font-mono text-sm text-primary">{done.reference}</p>
             <button
@@ -194,7 +193,7 @@ function SendDemo() {
               </label>
               <div className="grid gap-4 sm:grid-cols-2">
                 <label className="text-xs text-muted-foreground">
-                  Recipient business
+                  Supplier
                   <input
                     required
                     value={recipient}

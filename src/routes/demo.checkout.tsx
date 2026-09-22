@@ -25,12 +25,12 @@ export const Route = createFileRoute("/demo/checkout")({
       {
         name: "description",
         content:
-          "A demonstration of the Meridian checkout your African customers use to pay you by bank transfer, mobile money or card.",
+          "What your customer sees when they pay you through Meridian. Bank, mobile money or card. Fees shown first.",
       },
       { property: "og:title", content: "Demo checkout — Meridian" },
       {
         property: "og:description",
-        content: "See what paying a Meridian merchant looks like, with every fee shown up front.",
+        content: "The Meridian checkout, with every fee shown before payment.",
       },
     ],
   }),
@@ -54,7 +54,7 @@ function CheckoutDemo() {
   const [paid, setPaid] = useState<{ reference: string } | null>(null);
 
   const quote = quoteCollection(amount || 0, method);
-  const merchant = "Savanna Textiles Ltd";
+  const merchant = "Ridgeway Hardware Ltd";
 
   async function pay(e: React.FormEvent) {
     e.preventDefault();
@@ -78,8 +78,8 @@ function CheckoutDemo() {
       data: {
         to: email,
         subject: `Payment confirmation ${reference} — ${merchant}`,
-        heading: "Your payment went through",
-        intro: `This is a demo receipt for your simulated payment to ${merchant}. In the live product this email arrives seconds after the money settles.`,
+        heading: "Payment received",
+        intro: `Demo receipt for your simulated payment to ${merchant}. In the live product this arrives seconds after the money lands.`,
         rows: [
           { label: "Reference", value: reference },
           { label: "Paid to", value: merchant },
@@ -99,7 +99,7 @@ function CheckoutDemo() {
   return (
     <div className="min-h-screen">
       <DemoBanner>
-        Demo checkout — this is what your customers see. No money is collected.
+        Demo checkout. This is what your customer sees. No money is collected.
       </DemoBanner>
       <DemoHeader />
       <main className="mx-auto max-w-5xl px-5 py-12">
@@ -113,10 +113,9 @@ function CheckoutDemo() {
         {paid ? (
           <div className="panel mx-auto mt-8 max-w-lg p-8 text-center">
             <CheckCircle2 className="mx-auto h-12 w-12 text-success" />
-            <h1 className="mt-4 font-display text-2xl font-bold">Payment successful</h1>
+            <h1 className="mt-4 font-display text-2xl font-bold">Paid</h1>
             <p className="mt-2 text-sm text-muted-foreground">
-              {formatMoney(amount, currencyCode)} paid to {merchant}. Settled in 41 seconds. A
-              receipt has been emailed to {email}.
+              {formatMoney(amount, currencyCode)} paid to {merchant}. Receipt sent to {email}.
             </p>
             <p className="mt-4 font-mono text-sm text-primary">{paid.reference}</p>
             <button
@@ -132,7 +131,7 @@ function CheckoutDemo() {
               <div>
                 <p className="text-xs uppercase tracking-widest text-muted-foreground">Paying</p>
                 <h1 className="font-display text-2xl font-bold">{merchant}</h1>
-                <p className="text-sm text-muted-foreground">Invoice INV-2048 · Fabric order</p>
+                <p className="text-sm text-muted-foreground">Invoice INV-2048 · Power tools</p>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-3">
@@ -227,11 +226,10 @@ function CheckoutDemo() {
                 netLabel="Merchant receives"
               />
               <div className="panel p-5 text-sm text-muted-foreground">
-                <p className="font-semibold text-foreground">Why the merchant shows you this</p>
+                <p className="font-semibold text-foreground">Why you see the fees</p>
                 <p className="mt-2">
-                  Meridian displays the full cost of every collection — the licensed partner's fee
-                  and our flat 1% — before anyone confirms. No surprise deductions when the money
-                  lands.
+                  Meridian shows the partner fee and our 1% before anyone pays. No surprise
+                  deductions when the money lands.
                 </p>
               </div>
             </div>

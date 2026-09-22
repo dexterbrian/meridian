@@ -5,11 +5,7 @@ import { useState, type ReactNode } from "react";
 export function DemoBanner({ children }: { children?: ReactNode }) {
   return (
     <div className="border-b border-accent/30 bg-accent/10 px-4 py-2.5 text-center text-xs font-medium text-accent sm:text-sm">
-      {children ?? (
-        <>
-          Demo only — nothing here moves real money. Meridian is currently under development.
-        </>
-      )}
+      {children ?? <>Demo. No real money moves. Meridian is under development.</>}
     </div>
   );
 }
@@ -92,8 +88,7 @@ export function SiteFooter() {
         <div className="max-w-sm space-y-3">
           <Wordmark />
           <p className="text-sm text-muted-foreground">
-            African money in motion. Meridian clears the channels so capital flows to where it is
-            needed.
+            African money in motion. Pay suppliers and get paid across borders in minutes.
           </p>
           <p className="text-xs text-muted-foreground">
             A product of Appify Softwares Limited —{" "}
@@ -126,10 +121,10 @@ export function SiteFooter() {
               Checkout
             </Link>
             <Link to="/demo/send" className="block text-muted-foreground hover:text-foreground">
-              Cross-border send
+              Pay a supplier
             </Link>
             <Link to="/demo/request" className="block text-muted-foreground hover:text-foreground">
-              Payment request link
+              Payment link
             </Link>
           </div>
           <div className="space-y-2">
@@ -153,9 +148,9 @@ export function SiteFooter() {
         </div>
       </div>
       <div className="mx-auto mt-10 max-w-6xl border-t border-border/70 pt-6 text-xs text-muted-foreground">
-        Meridian is under active development. Everything on this site is a demonstration — no real
-        funds are held, moved or settled. Meridian is a technology platform; regulated, licensed
-        financial infrastructure partners handle all money movement.
+        Meridian is under development. Everything on this site is a demonstration. No real funds
+        move. Meridian is a technology platform. Licensed, regulated partners handle all money
+        movement.
       </div>
     </footer>
   );

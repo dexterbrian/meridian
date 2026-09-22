@@ -12,16 +12,15 @@ import { CURRENCIES, formatMoney, makeReference, type Currency } from "@/lib/fee
 export const Route = createFileRoute("/demo/request")({
   head: () => ({
     meta: [
-      { title: "Demo payment request link — Meridian" },
+      { title: "Demo payment link — Meridian" },
       {
         name: "description",
-        content:
-          "Create a shareable Meridian payment request link and see the payer experience, from request to settled.",
+        content: "Create a Meridian payment link and open it as the payer, from request to paid.",
       },
-      { property: "og:title", content: "Demo payment request link — Meridian" },
+      { property: "og:title", content: "Demo payment link — Meridian" },
       {
         property: "og:description",
-        content: "Generate a payment link, share it, and watch the payer settle it in minutes.",
+        content: "Create a payment link, share it, and settle it as the payer.",
       },
     ],
   }),
@@ -30,12 +29,12 @@ export const Route = createFileRoute("/demo/request")({
 
 function RequestDemo() {
   const notify = useServerFn(sendNotification);
-  const [fromBusiness, setFromBusiness] = useState("Savanna Textiles Ltd");
-  const [toBusiness, setToBusiness] = useState("Accra Packaging Co.");
+  const [fromBusiness, setFromBusiness] = useState("Kilimo Fresh Exports Ltd");
+  const [toBusiness, setToBusiness] = useState("Nordfrucht GmbH");
   const [toEmail, setToEmail] = useState("");
-  const [amount, setAmount] = useState(850000);
-  const [currencyCode, setCurrencyCode] = useState<Currency>("NGN");
-  const [memo, setMemo] = useState("Invoice INV-2048 — 400 rolls of cotton");
+  const [amount, setAmount] = useState(36000);
+  const [currencyCode, setCurrencyCode] = useState<Currency>("USD");
+  const [memo, setMemo] = useState("Invoice INV-2048 — avocado shipment, week 38");
   const [busy, setBusy] = useState(false);
   const [created, setCreated] = useState<{ reference: string; url: string } | null>(null);
 
@@ -64,7 +63,7 @@ function RequestDemo() {
           to: toEmail,
           subject: `${fromBusiness} requests ${formatMoney(amount, currencyCode)}`,
           heading: `${fromBusiness} sent you a payment request`,
-          intro: `Open the link below to settle this request. This is a product demo — no money will move.\n${url}`,
+          intro: `Open the link to pay. This is a demo. No money will move.\n${url}`,
           rows: [
             { label: "Reference", value: reference },
             { label: "Amount", value: formatMoney(amount, currencyCode) },
@@ -82,7 +81,7 @@ function RequestDemo() {
 
   return (
     <div className="min-h-screen">
-      <DemoBanner>Demo payment request — links are real, money is not.</DemoBanner>
+      <DemoBanner>Demo payment link. The link works. The money is not real.</DemoBanner>
       <header className="border-b border-border/70 px-5 py-4">
         <div className="mx-auto flex max-w-5xl items-center justify-between">
           <Wordmark />
@@ -100,10 +99,10 @@ function RequestDemo() {
           <ArrowLeft className="h-4 w-4" /> Back to Meridian
         </Link>
 
-        <h1 className="mt-6 font-display text-3xl font-bold">Request a payment with a link</h1>
+        <h1 className="mt-6 font-display text-3xl font-bold">Get paid with a link</h1>
         <p className="mt-2 max-w-2xl text-muted-foreground">
-          Ask another business to pay you without invoices going missing. Create the request, share
-          the link, and the payer settles it in a couple of taps — in their own currency.
+          Create the request. Share the link. Your buyer pays from their bank, card or mobile money.
+          You get local currency.
         </p>
 
         <div className="mt-8 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
@@ -119,7 +118,7 @@ function RequestDemo() {
                 />
               </label>
               <label className="text-xs text-muted-foreground">
-                Business you're billing
+                Who is paying you
                 <input
                   required
                   value={toBusiness}
@@ -166,7 +165,7 @@ function RequestDemo() {
                 type="email"
                 value={toEmail}
                 onChange={(e) => setToEmail(e.target.value)}
-                placeholder="finance@accrapackaging.com"
+                placeholder="accounts@nordfrucht.de"
                 className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
               />
             </label>
@@ -183,10 +182,9 @@ function RequestDemo() {
             {created ? (
               <div className="space-y-4">
                 <Link2 className="h-6 w-6 text-primary" />
-                <h2 className="font-display text-xl font-semibold">Your request is live</h2>
+                <h2 className="font-display text-xl font-semibold">Link ready</h2>
                 <p className="text-sm text-muted-foreground">
-                  Share this link with {toBusiness}. Opening it shows them the payment page — try it
-                  yourself to see the payer side.
+                  Share it with {toBusiness}. Open it yourself to see what they see.
                 </p>
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-surface/60 p-3">
                   <code className="flex-1 truncate font-mono text-xs text-primary">
@@ -219,16 +217,16 @@ function RequestDemo() {
               </div>
             ) : (
               <div className="space-y-3 text-sm text-muted-foreground">
-                <h2 className="font-display text-xl font-semibold text-foreground">
-                  How the loop works
-                </h2>
-                <p>1. You create a request for a specific amount and reason.</p>
-                <p>2. Meridian generates a secure link and can email it to the payer.</p>
+                <h2 className="font-display text-xl font-semibold text-foreground">How it works</h2>
+                <p>1. You create a request: amount and what it is for.</p>
+                <p>2. Meridian gives you a link. We can email it to the payer.</p>
                 <p>
-                  3. The payer opens it, sees the full cost breakdown, and settles from their bank
-                  or mobile money account.
+                  3. The payer opens it, sees the fees, and pays from bank, card or mobile money.
                 </p>
-                <p>4. Both sides get a confirmation and the request is marked paid.</p>
+                <p>4. You both get a receipt. The request is marked paid.</p>
+                <p className="pt-2">
+                  The same page can sit inside your own website as a checkout button.
+                </p>
               </div>
             )}
           </div>

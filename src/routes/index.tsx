@@ -30,17 +30,20 @@ import { CURRENCIES, formatMoney, quoteCrossBorder, type Currency } from "@/lib/
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Meridian — Payments that flow like they should" },
+      { title: "Meridian — Pay suppliers and get paid, across borders, in minutes" },
       {
         name: "description",
         content:
-          "Meridian lets African businesses send and receive money locally and across borders in minutes, saving up to 80% on transfer fees. Join the waitlist.",
+          "Meridian helps African importers and exporters pay suppliers and collect from customers anywhere, in minutes, for a flat 1% plus partner fees. Join the waitlist.",
       },
-      { property: "og:title", content: "Meridian — Payments that flow like they should" },
+      {
+        property: "og:title",
+        content: "Meridian — Pay suppliers and get paid, across borders, in minutes",
+      },
       {
         property: "og:description",
         content:
-          "Cross-border payments across Africa in minutes, not days. Transparent pricing, local currency in and out. Under development — join the waitlist.",
+          "Africa to Africa. Africa to the world. Flat 1% on top of our licensed partner's fee. No FX markup. Under development — join the waitlist.",
       },
     ],
   }),
@@ -79,14 +82,12 @@ function Hero() {
             <Sparkles className="h-3.5 w-3.5" /> In development — waitlist open
           </span>
           <h1 className="mt-6 font-display text-4xl font-bold leading-[1.05] sm:text-6xl">
-            Your money is sitting <span className="text-flow">in transit</span> while your business
-            waits.
+            Pay your supplier today. <span className="text-flow">Not next week.</span>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
-            Three days for a supplier payment to clear. 8–12% gone in fees and spread. A customer in
-            Nairobi who cannot pay your Lagos invoice without a bank visit. Meridian moves money
-            across African markets in minutes, in the currencies you already use, at a fraction of
-            today's cost.
+            Meridian is for African businesses that import and export. Pay a factory in China, a
+            packaging supplier in Ghana or a shipper in Dubai. Collect from a buyer in Germany or
+            Juba. Money lands in minutes. You see every fee before you confirm.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a
@@ -104,9 +105,9 @@ function Hero() {
           </div>
           <dl className="mt-12 grid max-w-lg grid-cols-3 gap-6">
             {[
-              { k: "Minutes", v: "not days to settle" },
-              { k: "Up to 80%", v: "lower transfer cost" },
+              { k: "Minutes", v: "not 4 to 5 days" },
               { k: "1%", v: "flat Meridian fee" },
+              { k: "0%", v: "FX markup from us" },
             ].map((s) => (
               <div key={s.k}>
                 <dt className="font-display text-2xl font-semibold text-primary">{s.k}</dt>
@@ -126,24 +127,24 @@ function Hero() {
           </div>
           <div className="mt-6 space-y-4">
             <div className="rounded-xl border border-border bg-surface/60 p-4">
-              <p className="text-xs text-muted-foreground">Lagos, Nigeria — you send</p>
-              <p className="font-display text-3xl font-semibold">₦4,500,000</p>
+              <p className="text-xs text-muted-foreground">Nairobi, Kenya — you send</p>
+              <p className="font-display text-3xl font-semibold">KSh 1,500,000</p>
             </div>
             <div className="meridian-line pl-5 text-sm text-muted-foreground">
               <p>Compliance checks cleared</p>
-              <p>Currency converted at mid-market + 0.35%</p>
-              <p>Payout instructed to recipient bank</p>
+              <p>Converted by our licensed partner</p>
+              <p>Payout sent to supplier's bank</p>
             </div>
             <div className="rounded-xl border border-primary/40 bg-primary/10 p-4">
-              <p className="text-xs text-muted-foreground">Nairobi, Kenya — supplier receives</p>
-              <p className="font-display text-3xl font-semibold text-primary">KSh 372,300</p>
+              <p className="text-xs text-muted-foreground">Shenzhen, China — supplier receives</p>
+              <p className="font-display text-3xl font-semibold text-primary">¥ 82,400</p>
               <p className="mt-1 text-xs text-muted-foreground">
-                Total cost ₦105,750 (2.35%) — a bank would have charged about ₦405,000
+                Total cost KSh 30,000 (2%). Your bank would take 8 to 10%.
               </p>
             </div>
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
-            Illustration using indicative demo pricing.
+            Illustration. Real fees and the amount received are shown before you confirm.
           </p>
         </div>
       </div>
@@ -156,23 +157,23 @@ function Hero() {
 const PAINS = [
   {
     icon: Clock,
-    title: "Your cash is stuck in limbo",
-    body: "A supplier payment sent Friday lands Wednesday. Production stops, containers sit at the port, and you pay demurrage on money you already sent.",
+    title: "The factory will not start until your money lands",
+    body: "Your bank takes 4 to 5 days to confirm a payment. The supplier's 14-day lead time starts after that. You run out of stock waiting.",
   },
   {
     icon: TrendingDown,
-    title: "Fees eat the margin you fought for",
-    body: "8–12% disappears between correspondent banks, FX spread and 'processing'. On $50,000 a month that is a salary you are paying to move your own money.",
+    title: "8 to 10% gone before the goods ship",
+    body: "Bank fees, a poor rate on your shilling account, and charges you only see on the statement. Some importers carry cash to a forex agent to get a fair rate.",
   },
   {
     icon: Globe2,
-    title: "Your customers cannot pay you easily",
-    body: "A buyer in Accra wants to pay your Kampala invoice. Between them sits a bank branch, a form, a swift code and a week of follow-up. Some of them simply do not pay.",
+    title: "Your buyer cannot pay you",
+    body: "A customer in Juba flies to Nairobi to pay in person. A buyer in Europe waits a week while their bank asks for invoices and shipping papers.",
   },
   {
     icon: Receipt,
-    title: "You cannot see what anything costs",
-    body: "The quoted fee is not the real fee. The rate is not the mid-market rate. You only learn the true cost when the money lands short.",
+    title: "You find out the real cost when the money arrives short",
+    body: "The quoted fee is not the whole fee. The rate is not the rate. Nobody shows you the total up front.",
   },
 ];
 
@@ -181,11 +182,11 @@ function Pain() {
     <section id="problem" className="border-t border-border/70 px-5 py-20">
       <div className="mx-auto max-w-6xl">
         <h2 className="max-w-2xl font-display text-3xl font-bold sm:text-4xl">
-          If you trade across African borders, you already know this pain
+          If you import or export, you know this already
         </h2>
         <p className="mt-4 max-w-2xl text-muted-foreground">
-          Meridian is not a nice-to-have dashboard. It is built for businesses whose growth is
-          capped by how slowly and expensively their money moves.
+          We heard these from Kenyan importers of electronics, hardware and cars, and from exporters
+          of fresh produce. Meridian is built for them.
         </p>
         <div className="mt-10 grid gap-5 sm:grid-cols-2">
           {PAINS.map((p) => (
@@ -206,23 +207,23 @@ function Pain() {
 const BENEFITS = [
   {
     icon: Clock,
-    title: "Speed",
-    body: "Payments settle in minutes, not days. Your cash is never stuck in limbo.",
+    title: "Minutes, not days",
+    body: "Your supplier sees the money the same day. Production starts. Stock arrives.",
   },
   {
     icon: Banknote,
-    title: "Cost",
-    body: "Save up to 80% on transaction fees compared with traditional cross-border transfers.",
+    title: "Flat 1%. No FX markup.",
+    body: "Our licensed partner's fee, plus 1% for Meridian. That is the whole price. We add nothing to the exchange rate.",
   },
   {
     icon: Wallet,
-    title: "Simplicity",
-    body: "Send and receive in your local currency. You see naira, cedis, shillings or dollars — nothing else.",
+    title: "Your currency, their currency",
+    body: "You pay in shillings from M-Pesa or your bank. They receive yuan, dollars, cedis or euros in their own account.",
   },
   {
     icon: Globe2,
-    title: "Reach",
-    body: "Pay suppliers, collect from customers and move money across African markets and beyond, from one app.",
+    title: "Africa and the world",
+    body: "Pay suppliers in China, Japan, Dubai, Europe and across Africa. Collect from buyers anywhere with a link or a checkout on your site.",
   },
 ];
 
@@ -233,15 +234,15 @@ function Solution() {
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <div>
             <h2 className="font-display text-3xl font-bold sm:text-4xl">
-              You tap send. The money arrives. That's it.
+              One account. Pay out. Get paid.
             </h2>
             <p className="mt-4 text-muted-foreground">
-              In acupuncture, a meridian is a channel through which vital energy flows freely. When
-              meridians are blocked, the body suffers. Money is the vital energy of a business —
-              Meridian clears the channels so capital reaches where it is needed.
+              Meridian sits between your bank or mobile money and the rest of the world. You send.
+              We handle conversion, compliance and delivery. Your supplier gets local currency.
             </p>
             <p className="mt-4 text-muted-foreground">
-              It works like the mobile money you already know, only faster, cheaper and borderless.
+              Meridian does not hold your money. Licensed, regulated partners move it. We build the
+              software and check every transaction.
             </p>
           </div>
           <div className="grid gap-5 sm:grid-cols-2">
@@ -265,20 +266,20 @@ const DEMOS = [
   {
     to: "/demo/checkout" as const,
     icon: Receipt,
-    title: "Customer checkout",
-    body: "See what your African customers experience when they pay you — bank transfer, mobile money or card, with the cost shown up front.",
+    title: "Checkout on your site",
+    body: "What your customer sees when they pay you. Bank, mobile money or card. Fees shown first.",
   },
   {
     to: "/demo/send" as const,
     icon: Globe2,
-    title: "Cross-border send",
-    body: "Pay a supplier in another African market and watch the conversion, fees and settlement timeline in real time.",
+    title: "Pay a supplier abroad",
+    body: "Send to another country. Watch the fees, the conversion and the payout, step by step.",
   },
   {
     to: "/demo/request" as const,
     icon: Link2,
-    title: "Payment request link",
-    body: "Create a shareable payment link, then open it as the payer and settle the invoice — the full request-to-paid loop.",
+    title: "Payment link",
+    body: "Create a link, share it, then open it as the payer and settle it.",
   },
 ];
 
@@ -288,10 +289,10 @@ function Demos() {
       <div className="mx-auto max-w-6xl">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h2 className="font-display text-3xl font-bold sm:text-4xl">Try the product now</h2>
+            <h2 className="font-display text-3xl font-bold sm:text-4xl">Try it</h2>
             <p className="mt-3 max-w-2xl text-muted-foreground">
-              These are working demonstrations of how Meridian will behave. They look and feel like
-              the real thing, but no money moves and no account is required.
+              Three working demos. They behave like the real product. No money moves. No account
+              needed.
             </p>
           </div>
           <span className="rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
@@ -300,7 +301,11 @@ function Demos() {
         </div>
         <div className="mt-10 grid gap-5 md:grid-cols-3">
           {DEMOS.map((d) => (
-            <Link key={d.to} to={d.to} className="panel group p-6 transition-colors hover:bg-surface">
+            <Link
+              key={d.to}
+              to={d.to}
+              className="panel group p-6 transition-colors hover:bg-surface"
+            >
               <d.icon className="h-6 w-6 text-primary" />
               <h3 className="mt-4 text-lg font-semibold">{d.title}</h3>
               <p className="mt-2 text-sm text-muted-foreground">{d.body}</p>
@@ -329,19 +334,18 @@ function Pricing() {
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-2 lg:items-start">
         <div>
           <h2 className="font-display text-3xl font-bold sm:text-4xl">
-            One flat 1%. On top of cost. Nothing hidden.
+            Partner fee, plus 1%. That is all.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            Our licensed infrastructure partners charge a fee to collect and pay out in local
-            currency. We show you that fee, add a flat 1%, and that is the whole price. No monthly
-            minimums, no markup buried in the exchange rate.
+            Our licensed partner charges a fee to collect and pay out. We show you that fee, add a
+            flat 1%, and that is the whole price. No monthly fee. No markup on the exchange rate.
           </p>
           <ul className="mt-6 space-y-3 text-sm">
             {[
-              "Bank transfer collection and payout: 1.0% partner fee",
-              "Mobile money collection and payout: 2.0% partner fee",
-              "Card collection: 2.5% partner fee",
-              "Currency conversion: mid-market rate + 0.35%",
+              "Bank transfer: about 1% partner fee",
+              "Mobile money: about 2% partner fee",
+              "Card: about 2.5% partner fee",
+              "Exchange rate: set by our partner, shown before you confirm",
               "Meridian: flat 1%",
             ].map((line) => (
               <li key={line} className="flex gap-3">
@@ -351,13 +355,12 @@ function Pricing() {
             ))}
           </ul>
           <p className="mt-6 text-xs text-muted-foreground">
-            Indicative pricing while we finish the build. Final published rates may vary by market
-            and payment method.
+            Partner fees are estimates until launch. They vary by country and method.
           </p>
         </div>
 
         <div className="panel p-6">
-          <p className="text-sm font-semibold">What will it cost me?</p>
+          <p className="text-sm font-semibold">What will it cost?</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-3">
             <label className="sm:col-span-1 block text-xs text-muted-foreground">
               You send
@@ -402,11 +405,11 @@ function Pricing() {
             <FeeBreakdown quote={quote} currencyCode={from} receiveCurrency={to} />
           </div>
           <p className="mt-4 text-sm text-muted-foreground">
-            On this transfer you keep{" "}
+            Compared with a typical bank route, you keep about{" "}
             <span className="font-semibold text-success">
               {formatMoney(Math.max(quote.saving, 0), from)}
-            </span>{" "}
-            that a traditional route would have taken.
+            </span>
+            .
           </p>
         </div>
       </div>
@@ -419,18 +422,18 @@ function Pricing() {
 const STEPS = [
   {
     n: "01",
-    title: "Sign up with your business details",
-    body: "A short business verification (KYB), like opening any mobile money account. It keeps you and the network compliant with anti-money-laundering rules.",
+    title: "Register your business",
+    body: "Upload your registration certificate and a director's ID. Start with small payments the same day. Upload the rest to raise your limits.",
   },
   {
     n: "02",
-    title: "Fund your account in local currency",
-    body: "Bank transfer or mobile money. Your balance shows in naira, cedis, shillings or dollars — the currency you actually think in.",
+    title: "Pay a supplier",
+    body: "Add the supplier once. Enter the amount. See the fees and what they will receive. Pay from M-Pesa or your bank. Done.",
   },
   {
     n: "03",
-    title: "Send or request payment",
-    body: "Pay anyone, anywhere. Recipients get local currency in their bank or mobile money account. Meridian handles conversion, compliance and settlement invisibly.",
+    title: "Get paid",
+    body: "Send a payment link or put our checkout on your website. Your customer pays by bank, mobile money or card. You get local currency in your account.",
   },
 ];
 
@@ -504,19 +507,18 @@ function Waitlist() {
       <div className="mx-auto grid max-w-6xl gap-10 lg:grid-cols-[0.95fr_1.05fr]">
         <div>
           <h2 className="font-display text-3xl font-bold sm:text-4xl">
-            Meridian is being built right now — help decide what ships first
+            Tell us where you send money. We build that route first.
           </h2>
           <p className="mt-4 text-muted-foreground">
-            We are in active development. The waitlist is not a mailing list: it is how we choose
-            which corridors, currencies and payout methods to launch with. Tell us where your money
-            is stuck and we will build that lane first.
+            Meridian is in development. The waitlist decides which countries and payment methods we
+            launch with.
           </p>
           <ul className="mt-6 space-y-3 text-sm text-muted-foreground">
             {[
-              "Founding-user pricing locked for your first 12 months",
-              "Early access before public launch, in your corridor",
-              "Direct line to the team building it — your pain points shape the roadmap",
-              "An email the day the app goes live. No spam in between.",
+              "Founding pricing locked for 12 months",
+              "Early access on your route before public launch",
+              "A direct line to the team",
+              "One email when we go live. Nothing else.",
             ].map((b) => (
               <li key={b} className="flex gap-3">
                 <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-accent" />
@@ -544,11 +546,11 @@ function Waitlist() {
                 <Field name="business_name" label="Business name" required />
                 <Field name="contact_name" label="Your name" required />
                 <Field name="email" label="Work email" type="email" required />
-                <Field name="country" label="Country of operation" placeholder="Kenya" />
+                <Field name="country" label="Country" placeholder="Kenya" />
               </div>
               <SelectField
                 name="monthly_volume"
-                label="Monthly payment volume"
+                label="Monthly cross-border volume"
                 options={[
                   "Under $10,000",
                   "$10,000 – $50,000",
@@ -559,13 +561,13 @@ function Waitlist() {
               />
               <div>
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="pain_point">
-                  Where does your money get stuck today?
+                  Who do you pay, or who pays you, across borders?
                 </label>
                 <textarea
                   id="pain_point"
                   name="pain_point"
                   rows={3}
-                  placeholder="e.g. Paying our fabric supplier in Ghana takes 4 days and costs us 9%."
+                  placeholder="e.g. We pay a hardware factory in China every month. Equity takes 5 days."
                   className="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
                 />
               </div>
@@ -577,7 +579,7 @@ function Waitlist() {
                 {busy ? "Adding you…" : "Get early access"}
               </button>
               <p className="text-xs text-muted-foreground">
-                We only email you about Meridian's development and launch.
+                We only email you about Meridian. No marketing lists.
               </p>
             </form>
           )}
@@ -636,9 +638,7 @@ function Contact() {
         <div>
           <h2 className="font-display text-3xl font-bold sm:text-4xl">Talk to us</h2>
           <p className="mt-4 text-muted-foreground">
-            Partnership, compliance, corridor coverage or a question about who our licensed
-            infrastructure partners are — ask and we'll answer. Every message gets an automatic
-            confirmation and a human reply.
+            Ask about a country we do not list yet, our partners, or compliance. A person replies.
           </p>
           <p className="mt-4 text-sm text-muted-foreground">
             Meridian is built by Appify Softwares Limited,{" "}
@@ -700,48 +700,48 @@ function Contact() {
 
 const FAQS = [
   {
-    q: "Is Meridian available today?",
-    a: "Not yet. Meridian is under active development. What you can use on this site are working demonstrations of the product. Join the waitlist and we will email you the day early access opens.",
+    q: "Can I use Meridian today?",
+    a: "Not yet. We are building it. The demos on this site show how it will work. Join the waitlist and we will email you when early access opens.",
   },
   {
-    q: "How does the money actually move so fast?",
-    a: "Under the hood Meridian settles using stablecoins — digital dollars that move over the internet in seconds — instead of chains of correspondent banks. You never touch them: you see naira, cedis, shillings or dollars, and recipients receive local currency in their bank or mobile money account. No wallets, no crypto jargon, no blockchain knowledge required, ever.",
+    q: "Which countries can I pay?",
+    a: "At launch: China, Japan, UAE, the UK, the US and the eurozone, plus Kenya, Nigeria, Ghana, South Africa, Uganda and Tanzania. Waitlist answers decide the order. Ask us about a country not listed.",
   },
   {
-    q: "Do I need to know anything about crypto?",
-    a: "No. Stablecoins are an internal settlement rail, the same way card networks or SWIFT are today. You fund in your local currency, send in your local currency and your recipient is paid in theirs.",
-  },
-  {
-    q: "Does Meridian hold my money?",
-    a: "No. Meridian is strictly a technology platform. We do not hold, control or handle client funds. All funds are held and moved by our licensed and compliant financial infrastructure partners, who are regulated in the markets where they operate.",
-  },
-  {
-    q: "Who are your infrastructure partners?",
-    a: "We work with licensed and compliant financial infrastructure providers for collections, currency conversion and payouts across African markets. We are happy to share the specific partners on request — send us a note through the contact form above.",
+    q: "Where can my customers pay from?",
+    a: "From Africa by mobile money, bank or card. From Europe by card or bank. More regions as partners add coverage.",
   },
   {
     q: "What does it cost?",
-    a: "Our partners charge a fee to collect and pay out in local currency (typically 1% for bank transfer, 2% for mobile money, 2.5% for cards) plus a 0.35% conversion spread where currencies differ. Meridian adds a flat 1% on top of that — and shows you every line before you confirm.",
+    a: "Our licensed partner charges a fee to collect and pay out. Roughly 1% for bank, 2% for mobile money, 2.5% for card. Meridian adds a flat 1%. We do not add anything to the exchange rate. You see every line and the exact amount your recipient gets before you confirm.",
   },
   {
-    q: "Why do I have to verify my business?",
-    a: "Business verification (KYB) is required for anti-money-laundering compliance in every market we serve. It is a one-time onboarding step, similar to opening a mobile money or business bank account, and it protects everyone on the network.",
+    q: "How fast is it?",
+    a: "Most payments land in minutes. Bank wires to some countries can take up to a day. The exact timing shows before you confirm.",
   },
   {
-    q: "Which countries and currencies will you support?",
-    a: "We are launching across major African corridors — Nigeria, Kenya, Ghana, South Africa, Uganda and Tanzania to start — with US dollar support for international counterparties. Waitlist responses decide the order we build in.",
+    q: "Does Meridian hold my money?",
+    a: "No. Licensed, regulated payment partners collect, convert and pay out. Meridian is the software and the compliance layer. We will name our partners on request through the contact form.",
   },
   {
-    q: "How long do payments take?",
-    a: "Most payments settle in minutes. Timing at the very edges depends on the recipient's bank or mobile money operator, and on compliance checks for larger amounts.",
+    q: "How does it move so fast?",
+    a: "Our partners settle over digital dollar rails instead of chains of correspondent banks. You never see or touch any of that. You pay in shillings. Your supplier gets yuan, euros or dollars.",
   },
   {
-    q: "Who builds and owns Meridian?",
-    a: "Meridian is a product of Appify Softwares Limited (appify.co.ke). Meridian is strictly a technology platform provider; our licensed financial infrastructure partners handle all money movement and custody.",
+    q: "What do I need to sign up?",
+    a: "Your business registration certificate and a director's ID to start with small payments. Add your tax certificate, proof of address and ownership details to raise your limits. Anti-money-laundering law requires this in every country we serve.",
   },
   {
-    q: "Are the demos on this site real transactions?",
-    a: "No. Every demo — checkout, cross-border send and payment request links — is a simulation for illustration. No funds move, no account is created and the confirmation emails are clearly marked as demo messages.",
+    q: "How big can my payments be?",
+    a: "Start at up to USD 500 per payment with basic documents. Up to USD 10,000 per payment once we review your full documents. Higher limits on request for established exporters and importers.",
+  },
+  {
+    q: "Who builds Meridian?",
+    a: "Appify Softwares Limited, Nairobi (appify.co.ke).",
+  },
+  {
+    q: "Are the demos real?",
+    a: "No. Nothing moves. No account is created. Demo emails are marked as demos.",
   },
 ];
 
@@ -797,15 +797,7 @@ function Field({
   );
 }
 
-function SelectField({
-  name,
-  label,
-  options,
-}: {
-  name: string;
-  label: string;
-  options: string[];
-}) {
+function SelectField({ name, label, options }: { name: string; label: string; options: string[] }) {
   return (
     <div>
       <label className="text-xs font-medium text-muted-foreground" htmlFor={name}>
