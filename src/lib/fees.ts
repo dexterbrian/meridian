@@ -1,5 +1,7 @@
 // Indicative demo pricing model.
 // Partner (infrastructure) fees are the rails cost; Meridian adds a flat 1% on top.
+// Meridian charges nothing for FX. The partner's quoted rate is used as-is.
+// Demo conversion uses fixed reference rates below; the real product uses the partner quote.
 
 export type PayMethod = "bank" | "momo" | "card";
 
@@ -10,7 +12,6 @@ export const PARTNER_FEE: Record<PayMethod, number> = {
 };
 
 export const MERIDIAN_FEE = 0.01; // flat 1% on top of infrastructure cost
-export const FX_SPREAD = 0.0035; // 0.35% conversion spread on cross-border legs
 
 export const METHOD_LABEL: Record<PayMethod, string> = {
   bank: "Bank transfer",
@@ -88,10 +89,9 @@ export function quoteCrossBorder(
   to: Currency,
   payoutMethod: PayMethod,
 ): Quote {
-  const sameCurrency = from === to;
   const partnerFee = amount * (PARTNER_FEE["bank"] + PARTNER_FEE[payoutMethod]) * 0.5;
   const meridianFee = amount * MERIDIAN_FEE;
-  const fxFee = sameCurrency ? 0 : amount * FX_SPREAD;
+  const fxFee = 0; // Meridian does not charge for conversion
   const totalFee = partnerFee + meridianFee + fxFee;
   const netAfterFees = amount - totalFee;
   const recipientGets = convert(netAfterFees, from, to);

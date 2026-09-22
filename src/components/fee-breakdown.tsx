@@ -56,20 +56,13 @@ export function FeeBreakdown({
       <div className="divide-y divide-border/70">
         <FeeRow label="Amount" value={formatMoney(quote.amount, currencyCode)} />
         <FeeRow
-          label="Infrastructure partner fee"
-          hint="Charged by our licensed payment partners"
+          label="Partner fee"
+          hint="Charged by our licensed payment partner"
           value={formatMoney(quote.partnerFee, currencyCode)}
         />
-        {quote.fxFee > 0 && (
-          <FeeRow
-            label="Currency conversion"
-            hint="0.35% spread on the converted leg"
-            value={formatMoney(quote.fxFee, currencyCode)}
-          />
-        )}
         <FeeRow
           label="Meridian fee"
-          hint="Flat 1% on top of partner cost — that's all we take"
+          hint="Flat 1%. No FX markup."
           value={formatMoney(quote.meridianFee, currencyCode)}
         />
         <FeeRow
@@ -79,18 +72,19 @@ export function FeeBreakdown({
         />
         <FeeRow label={netLabel} value={formatMoney(quote.recipientGets, receive)} emphasis />
         <FeeRow
-          label="Typical bank / traditional route"
+          label="Typical bank route"
           hint="What the same transfer usually costs today"
           value={formatMoney(quote.traditionalFee, currencyCode)}
         />
         <FeeRow
-          label="You save"
+          label="You keep"
           value={formatMoney(Math.max(quote.saving, 0), currencyCode)}
           positive
         />
       </div>
       <p className="mt-3 text-xs text-muted-foreground">
-        Indicative demo pricing. Real rates are confirmed at the moment of the transaction.
+        Demo estimate. Real fees and the amount received are confirmed by our partner before you
+        pay.
       </p>
     </div>
   );
