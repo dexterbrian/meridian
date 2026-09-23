@@ -30,7 +30,7 @@ const config = (mode: string) => ({
   // Vite must pre-bundle, or the overlay itself fails to load.
   optimizeDeps: { include: ["@jridgewell/trace-mapping"] },
   plugins: [
-    solidStart(),
+    solidStart({ middleware: "./src/middleware.ts" }),
     tailwindcss(),
     nitro(
       mode === "workers"
