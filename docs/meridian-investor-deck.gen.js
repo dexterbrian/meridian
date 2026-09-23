@@ -22,6 +22,7 @@ const C = {
   border: "D7E4DF", // was E4DBC9
   mid: "7FA39C", // was 8FA3B0
   tintAccent: "E6F7F0", // was FFF3E2
+  ink: "0B1A19", // ring inside the Meridian mark
 };
 const F = "Calibri";
 const OUT = process.argv[2] || "meridian-investor-deck.pptx";
@@ -100,6 +101,17 @@ async function iconDisc(s, names, cx, cy, d, o = {}) {
   s.addImage({ data: await icon(names, o.iconColor || C.dark), x: cx + (d - id) / 2, y: cy + (d - id) / 2, w: id, h: id });
 }
 
+// Meridian mark: the mint tile with an ink-ringed dot, same proportions as the pitch deck.
+function mark(s, x, y, d) {
+  shape(s, "roundRect", x, y, d, d, { fill: C.accent, line: C.accent, r: d * 0.218 });
+  const id = d * 0.436;
+  s.addShape(pres.shapes.OVAL, {
+    x: x + (d - id) / 2, y: y + (d - id) / 2, w: id, h: id,
+    fill: { color: C.accent },
+    line: { color: C.ink, width: Math.max(0.75, d * 3.64) },
+  });
+}
+
 function chrome(s, n, o = {}) {
   const muted = o.dark ? C.mutedDark : C.mutedLight;
   T(s, o.eyebrow, 0.7, 0.56, 11.93, 0.3, { size: 11, color: muted, spc: 60 });
@@ -109,8 +121,9 @@ function chrome(s, n, o = {}) {
     color: o.dark ? C.cream : C.dark,
     valign: "top", isTextBox: true, margin: 0, lineSpacingMultiple: 1.04,
   });
-  T(s, "MERIDIAN · APPIFY SOFTWARES", 0.7, 7.12, 4.0, 0.26, { size: 8, color: muted, spc: 40 });
-  T(s, `PROJECTIONS ILLUSTRATIVE · ${String(n).padStart(2, "0")} / ${TOTAL}`, 8.13, 7.12, 4.5, 0.26, {
+  mark(s, 0.7, 6.98, 0.3);
+  T(s, "MERIDIAN · APPIFY SOFTWARES", 1.1, 7.0, 3.6, 0.26, { size: 8, color: muted, spc: 40 });
+  T(s, `PROJECTIONS ILLUSTRATIVE · ${String(n).padStart(2, "0")} / ${TOTAL}`, 8.13, 7.0, 4.5, 0.26, {
     size: 8, color: muted, align: "right", spc: 40,
   });
 }
@@ -126,6 +139,7 @@ function slide(dark) {
   // ============================================================ 1 · TITLE
   {
     const s = slide(true);
+    mark(s, 0.7, 0.46, 0.62);
     pill(s, "PRE-SEED", 10.98, 0.56, 1.65, 0.42, { fill: C.dark, line: C.accent, color: C.accent, size: 9.5 });
 
     s.addText(
@@ -133,11 +147,11 @@ function slide(dark) {
         { text: "Meridian", options: { color: C.cream } },
         { text: ".", options: { color: C.accent } },
       ],
-      { x: 0.85, y: 2.05, w: 7.2, h: 1.65, fontFace: F, fontSize: 84, bold: true, valign: "middle", isTextBox: true, margin: 0 },
+      { x: 0.7, y: 2.05, w: 7.4, h: 1.65, fontFace: F, fontSize: 84, bold: true, valign: "middle", isTextBox: true, margin: 0 },
     );
     T(s, "Cross-border payments for African importers and exporters. Money lands in minutes, for a flat 1% and no FX markup.",
-      0.9, 3.95, 6.9, 1.5, { size: 21, color: C.cream, lsm: 1.25, valign: "top" });
-    T(s, "Brian Waweru, Founder   ·   Nairobi   ·   brian@appify.co.ke", 0.9, 5.55, 6.9, 0.35, { size: 12.5, color: C.mutedDark });
+      0.7, 3.95, 7.1, 1.5, { size: 21, color: C.cream, lsm: 1.25, valign: "top" });
+    T(s, "Brian Waweru, Founder   ·   Nairobi   ·   brian@appify.co.ke", 0.7, 5.55, 7.1, 0.35, { size: 12.5, color: C.mutedDark });
 
     // designed panel (template photo slot)
     card(s, 8.3, 1.55, 4.33, 4.6, { fill: C.darkCard, line: C.darkCardLine, r: 0.14 });
@@ -154,13 +168,13 @@ function slide(dark) {
     T(s, "Nairobi to Shenzhen, our first corridor", 8.3, 6.26, 4.33, 0.28, { size: 9.5, color: C.mutedDark });
 
     T(s, "Pre-revenue. Volumes and costs come from five customer interviews; pricing from our partners' published rates.",
-      0.9, 6.98, 8.6, 0.32, { size: 10, color: C.mutedDark });
+      0.7, 6.95, 8.6, 0.32, { size: 10, color: C.mutedDark });
     s.addText(
       [
         { text: "Appify", options: { color: C.cream } },
         { text: ".", options: { color: C.accent } },
       ],
-      { x: 10.43, y: 6.94, w: 2.2, h: 0.38, fontFace: F, fontSize: 13, bold: true, align: "right", valign: "middle", isTextBox: true, margin: 0 },
+      { x: 10.43, y: 6.92, w: 2.2, h: 0.38, fontFace: F, fontSize: 13, bold: true, align: "right", valign: "middle", isTextBox: true, margin: 0 },
     );
     s.addNotes(
       "HOOK (~15s): I'm Brian Waweru, founder of Meridian. Kenyan businesses that import and export wait four to five days and pay eight to ten percent to move money across a border. We make that minutes, for a flat one percent, with no markup on the rate. Here is what that costs them today.",
@@ -197,11 +211,11 @@ function slide(dark) {
     T(s, "KES 1.5M, Nairobi to Shenzhen. Bank timing reported by interviewees.", 0.95, 6.5, 5.9, 0.2, { size: 8.5, color: C.mutedLight });
 
     // big number panel
-    card(s, 7.85, 2.45, 4.78, 3.95, { fill: C.dark, line: null, r: 0.14 });
+    card(s, 7.85, 2.45, 4.78, 4.35, { fill: C.dark, line: null, r: 0.14 });
     T(s, "THE COST OF WAITING", 8.25, 2.85, 4.0, 0.3, { size: 10, color: C.mutedDark, spc: 60 });
-    T(s, "200,000", 8.2, 3.15, 4.1, 1.6, { size: 74, color: C.accent });
-    T(s, "KES lost per importer, every month", 8.25, 4.95, 4.0, 0.35, { size: 15, color: C.cream });
-    T(s, "*On KES 2M monthly volume at 8–10%, the range importers reported to us.", 8.25, 5.7, 4.0, 0.45, { size: 9.5, color: C.mutedDark, lsm: 1.2, valign: "top" });
+    T(s, "200,000", 8.25, 3.15, 4.0, 1.6, { size: 74, color: C.accent });
+    T(s, "KES lost per importer, every month", 8.25, 5.15, 4.0, 0.35, { size: 15, color: C.cream });
+    T(s, "*On KES 2M monthly volume at 8–10%, the range importers reported to us.", 8.25, 5.95, 4.0, 0.45, { size: 9.5, color: C.mutedDark, lsm: 1.2, valign: "top" });
 
     s.addNotes(
       "(~30s): A hardware importer moving two million shillings a month loses between a hundred sixty and two hundred thousand of it to fees and a bad rate. That is the visible cost. The expensive one is time: the factory has a fourteen-day lead time and will not start until payment confirms, so a five-day bank delay becomes a stockout. And it runs both ways — exporters tell us foreign buyers simply cannot pay them.",
@@ -222,15 +236,15 @@ function slide(dark) {
     for (let i = 0; i < 3; i++) {
       const [ic, label, head, body, hot] = cards[i];
       const x = xs[i];
-      card(s, x, 2.5, 3.62, 2.65, { r: 0.12 });
+      card(s, x, 2.5, 3.62, 2.76, { r: 0.12 });
       await iconDisc(s, ic, x + 0.32, 2.84, 0.72, {
         fill: hot ? C.dark : C.light,
         line: hot ? C.dark : C.border,
         iconColor: hot ? C.accent : C.dark,
       });
-      T(s, label, x + 0.32, 3.74, 3.02, 0.26, { size: 9, color: C.mutedLight, spc: 70 });
-      T(s, head, x + 0.32, 4.0, 3.02, 0.36, { size: 16.5, color: C.dark });
-      T(s, body, x + 0.32, 4.4, 3.02, 0.62, { size: 12.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
+      T(s, label, x + 0.32, 3.74, 2.98, 0.26, { size: 9, color: C.mutedLight, spc: 70 });
+      T(s, head, x + 0.32, 4.0, 2.98, 0.36, { size: 16.5, color: C.dark });
+      T(s, body, x + 0.32, 4.4, 2.98, 0.62, { size: 12.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
     }
     T(s, "→", 4.42, 3.56, 0.4, 0.45, { size: 22, color: C.mutedLight, align: "ctr" });
     T(s, "→", 8.56, 3.56, 0.4, 0.45, { size: 22, color: C.mutedLight, align: "ctr" });
@@ -275,8 +289,8 @@ function slide(dark) {
     pill(s, "NEXT · LIVE RAILS", 4.75, 6.15, 1.95, 0.44, { fill: C.dark, line: C.dark, color: C.cream });
 
     // phone mock
-    card(s, 9.55, 1.6, 3.05, 5.2, { fill: C.dark, line: null, r: 0.3 });
-    card(s, 9.69, 1.77, 2.77, 4.86, { fill: C.white, line: null, r: 0.2 });
+    card(s, 9.55, 1.6, 3.08, 5.2, { fill: C.dark, line: null, r: 0.3 });
+    card(s, 9.69, 1.77, 2.80, 4.86, { fill: C.white, line: null, r: 0.2 });
     s.addText(
       [
         { text: "Meridian", options: { color: C.dark } },
@@ -307,7 +321,7 @@ function slide(dark) {
       { x: 10.0, y: 4.22, w: 2.15, h: 0.86, fontFace: F, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.1 },
     );
     T(s, "receipt sent to both sides", 9.86, 5.26, 2.43, 0.3, { size: 8.5, color: C.mutedLight });
-    shape(s, "roundRect", 10.78, 6.44, 0.6, 0.06, { fill: C.border, r: 0.03 });
+    shape(s, "roundRect", 10.79, 6.44, 0.6, 0.06, { fill: C.border, r: 0.03 });
 
     s.addNotes(
       "(~40s): Three things. Send: pick a saved supplier, see the partner fee, our one percent, and exactly what they receive, then pay in from M-Pesa or your bank. Collect: a link you send, or our checkout embedded on your own site with one script tag, so a buyer in Hamburg can pay you. Clear: tiered business verification in a day rather than weeks, and sanctions and AML checks on every single payment. All three flows are demoable today against partner sandboxes; live rails are next.",
@@ -320,9 +334,9 @@ function slide(dark) {
     chrome(s, 5, { eyebrow: "05 · MARKET", title: "500 Kenyan trading businesses: our first wedge." });
 
     const bars = [
-      { bx: 0.9, tx: 0.7, y: 2.65, h: 3.5, fill: C.dark, val: "$260M", lbl: "TAM", sub: "Kenya cross-border\ngoods trade, at 1%*", valColor: C.dark },
-      { bx: 3.1, tx: 2.9, y: 4.15, h: 2.0, fill: C.mid, val: "$40M", lbl: "SAM", sub: "SME trade inside our\npartners' corridors*", valColor: C.dark },
-      { bx: 5.3, tx: 5.1, y: 5.3, h: 0.85, fill: C.gold, val: "$700K/yr", lbl: "SOM", sub: "500 businesses ×\nKES 1.5M/mo", valColor: C.accentDeep },
+      { bx: 0.9, tx: 0.7, y: 2.65, h: 3.35, fill: C.dark, val: "$260M", lbl: "TAM", sub: "Kenya cross-border\ngoods trade, at 1%*", valColor: C.dark },
+      { bx: 3.1, tx: 2.9, y: 4.0, h: 2.0, fill: C.mid, val: "$40M", lbl: "SAM", sub: "SME trade inside our\npartners' corridors*", valColor: C.dark },
+      { bx: 5.3, tx: 5.1, y: 5.15, h: 0.85, fill: C.gold, val: "$700K/yr", lbl: "SOM", sub: "500 businesses ×\nKES 1.5M/mo", valColor: C.accentDeep },
     ];
     for (const b of bars) {
       shape(s, "rect", b.bx, b.y, 1.7, b.h, { fill: b.fill });
@@ -332,12 +346,12 @@ function slide(dark) {
           { text: b.lbl, options: { fontSize: 11, color: C.dark, breakLine: true, charSpacing: 40 } },
           { text: b.sub, options: { fontSize: 9, color: C.mutedLight } },
         ],
-        { x: b.tx, y: 6.25, w: 2.1, h: 0.75, fontFace: F, bold: true, align: "ctr", valign: "top", isTextBox: true, margin: 0, lineSpacingMultiple: 1.2 },
+        { x: b.tx, y: 6.1, w: 2.1, h: 0.7, fontFace: F, bold: true, align: "ctr", valign: "top", isTextBox: true, margin: 0, lineSpacingMultiple: 1.2 },
       );
     }
 
     card(s, 7.85, 2.5, 4.78, 3.78, { r: 0.14 });
-    T(s, "THE WEDGE MATH · BOTTOM-UP", 8.2, 2.85, 4.1, 0.28, { size: 10, color: C.mutedLight, spc: 60 });
+    T(s, "THE WEDGE MATH · BOTTOM-UP", 8.25, 2.85, 4.03, 0.28, { size: 10, color: C.mutedLight, spc: 60 });
     s.addText(
       [
         { text: "500 businesses", options: { fontSize: 17, color: C.dark, breakLine: true } },
@@ -345,12 +359,12 @@ function slide(dark) {
         { text: "× 1%", options: { fontSize: 14, color: C.dark, breakLine: true } },
         { text: "= KES 90M a year  (~$700K)", options: { fontSize: 14, color: C.accentDeep } },
       ],
-      { x: 8.2, y: 3.25, w: 4.1, h: 1.55, fontFace: F, bold: true, valign: "top", isTextBox: true, margin: 0, lineSpacingMultiple: 1.35 },
+      { x: 8.25, y: 3.25, w: 4.03, h: 1.55, fontFace: F, bold: true, valign: "top", isTextBox: true, margin: 0, lineSpacingMultiple: 1.35 },
     );
     T(s, "Exporters lift this sharply. One avocado exporter alone moves about USD 150,000 a month.",
-      8.2, 5.0, 4.1, 0.55, { size: 12.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
+      8.25, 5.0, 4.03, 0.55, { size: 12.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
     T(s, "*Top-down figures approximate. Verify before circulating.",
-      8.2, 5.78, 4.1, 0.3, { size: 9.5, color: C.mutedLight });
+      8.25, 5.83, 4.03, 0.3, { size: 9.5, color: C.mutedLight });
 
     s.addNotes(
       "(~25s): We size this bottom-up. Five hundred trading businesses, each moving one and a half million shillings a month across a border, at one percent, is ninety million shillings a year — about seven hundred thousand dollars. That is the wedge, and it is a fraction of Kenya's cross-border goods trade. Exporters lift it: a single avocado exporter moves a hundred fifty thousand dollars a month. The top-down numbers are approximate; the bottom-up one comes from interview ticket sizes.",
@@ -364,21 +378,21 @@ function slide(dark) {
 
     const units = [
       { x: 0.7, ic: "LuUserPlus", lbl: "CAC", val: "$200", sub: "founder-led and referral" },
-      { x: 4.53, ic: "LuClock", lbl: "PAYBACK", val: "~2 mo", sub: "on fees alone" },
-      { x: 8.36, ic: "LuTrendingUp", lbl: "LTV", val: "$3,400", sub: "three years, 80% retention" },
+      { x: 4.813, ic: "LuClock", lbl: "PAYBACK", val: "~2 mo", sub: "on fees alone" },
+      { x: 8.926, ic: "LuTrendingUp", lbl: "LTV", val: "$3,400", sub: "three years, 80% retention" },
     ];
     for (const u of units) {
-      card(s, u.x, 2.42, 3.42, 1.98, { r: 0.12 });
+      card(s, u.x, 2.42, 3.703, 1.98, { r: 0.12 });
       await iconDisc(s, u.ic, u.x + 0.28, 2.72, 0.6, { fill: C.light });
-      T(s, u.lbl, u.x + 1.02, 2.76, 2.22, 0.26, { size: 10, color: C.mutedLight, spc: 70 });
-      T(s, u.val, u.x + 1.02, 3.0, 2.22, 0.62, { size: 30, color: C.dark });
-      T(s, u.sub, u.x + 0.28, 3.84, 2.86, 0.36, { size: 12, color: C.mutedLight });
+      T(s, u.lbl, u.x + 1.02, 2.76, 2.403, 0.26, { size: 10, color: C.mutedLight, spc: 70 });
+      T(s, u.val, u.x + 1.02, 3.0, 2.403, 0.62, { size: 30, color: C.dark });
+      T(s, u.sub, u.x + 0.28, 3.84, 3.143, 0.36, { size: 12, color: C.mutedLight });
     }
-    T(s, "→", 4.13, 3.17, 0.4, 0.45, { size: 20, color: C.mutedLight, align: "ctr" });
-    T(s, "→", 7.96, 3.17, 0.4, 0.45, { size: 20, color: C.mutedLight, align: "ctr" });
+    T(s, "→", 4.408, 3.17, 0.4, 0.45, { size: 20, color: C.mutedLight, align: "ctr" });
+    T(s, "→", 8.521, 3.17, 0.4, 0.45, { size: 20, color: C.mutedLight, align: "ctr" });
 
     card(s, 0.7, 4.85, 7.35, 1.62, { fill: C.dark, line: null, r: 0.14 });
-    T(s, "17×", 1.1, 5.08, 2.5, 1.15, { size: 54, color: C.accent });
+    T(s, "17×", 1.05, 5.08, 2.5, 1.15, { size: 54, color: C.accent });
     s.addText(
       [
         { text: "LTV to CAC", options: { fontSize: 15, color: C.cream, breakLine: true } },
@@ -392,7 +406,7 @@ function slide(dark) {
         { text: "85% gross margin", options: { fontSize: 16, color: C.dark, breakLine: true } },
         { text: "Partner fees pass through, not absorbed.", options: { fontSize: 12.5, color: C.mutedLight } },
       ],
-      { x: 8.75, y: 5.22, w: 3.6, h: 0.9, fontFace: F, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.3 },
+      { x: 8.75, y: 5.22, w: 3.53, h: 0.9, fontFace: F, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.3 },
     );
 
     s.addNotes(
@@ -446,8 +460,8 @@ function slide(dark) {
     ];
     let sy = 2.92;
     for (const [k, v] of stats) {
-      T(s, k, 8.72, sy, 3.6, 0.55, { size: 28, color: C.dark });
-      T(s, v, 8.72, sy + 0.55, 3.6, 0.32, { size: 12, color: C.mutedLight });
+      T(s, k, 8.72, sy, 3.54, 0.55, { size: 28, color: C.dark });
+      T(s, v, 8.72, sy + 0.55, 3.54, 0.32, { size: 12, color: C.mutedLight });
       sy += 1.28;
     }
 
@@ -492,7 +506,7 @@ function slide(dark) {
         { text: "Moat forming: ", options: { color: C.dark } },
         { text: "every settled payment trains our compliance engine and our corridor routing. A copycat starts from zero.", options: { color: C.mutedLight } },
       ],
-      { x: 1.62, y: 5.74, w: 10.3, h: 0.6, fontFace: F, fontSize: 14, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.2 },
+      { x: 1.62, y: 5.74, w: 11.01, h: 0.6, fontFace: F, fontSize: 14, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.2 },
     );
 
     s.addNotes(
@@ -517,8 +531,8 @@ function slide(dark) {
         fill: g.hot ? C.dark : C.white, line: g.hot ? C.dark : C.border,
         color: g.hot ? C.cream : C.mutedLight, size: 8.5,
       });
-      T(s, g.head, 2.9, gy - 0.02, 3.1, 0.36, { size: 15.5, color: C.dark });
-      T(s, g.body, 2.9, gy + 0.4, 5.0, 0.64, { size: 12.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
+      T(s, g.head, 2.9, gy - 0.02, 2.95, 0.36, { size: 15.5, color: C.dark });
+      T(s, g.body, 2.9, gy + 0.46, 5.0, 0.62, { size: 12.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
       pill(s, g.chip, 5.95, gy - 0.02, 1.95, 0.42, {
         fill: g.chipHot ? C.accent : C.white, line: g.chipHot ? C.accent : C.border, color: C.dark, size: 10,
       });
@@ -526,7 +540,7 @@ function slide(dark) {
     }
 
     // designed panel (template photo slot): payment link mock
-    card(s, 8.3, 2.62, 4.33, 3.75, { r: 0.14 });
+    card(s, 8.3, 2.62, 4.33, 3.8, { r: 0.14 });
     s.addText(
       [
         { text: "Meridian", options: { color: C.dark } },
@@ -538,8 +552,8 @@ function slide(dark) {
     T(s, "Kilimo Fresh Exports Ltd", 8.62, 3.36, 3.7, 0.26, { size: 9.5, color: C.mutedLight });
     T(s, "USD 36,000", 8.62, 3.6, 3.7, 0.5, { size: 24, color: C.dark });
     T(s, "Invoice INV-2048 · avocado shipment, week 38", 8.62, 4.04, 3.7, 0.24, { size: 9, color: C.mutedLight });
-    const chips = [["Bank", 8.62], ["Card", 9.87], ["M-Pesa", 11.12]];
-    for (const [t, cx] of chips) pill(s, t, cx, 4.4, 1.2, 0.34, { fill: C.light, line: C.border, color: C.dark, size: 9 });
+    const chips = [["Bank", 8.62], ["Card", 9.9], ["M-Pesa", 11.18]];
+    for (const [t, cx] of chips) pill(s, t, cx, 4.34, 1.14, 0.34, { fill: C.light, line: C.border, color: C.dark, size: 9 });
     s.addText(
       [
         { text: "Partner fee", options: { fontSize: 9.5, color: C.mutedLight } },
@@ -547,11 +561,11 @@ function slide(dark) {
         { text: "Meridian 1%", options: { fontSize: 9.5, color: C.mutedLight } },
         { text: "   $360", options: { fontSize: 9.5, color: C.dark } },
       ],
-      { x: 8.62, y: 4.92, w: 3.7, h: 0.5, fontFace: F, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.3 },
+      { x: 8.62, y: 4.86, w: 3.7, h: 0.5, fontFace: F, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.3 },
     );
-    pill(s, "Pay USD 36,000", 8.62, 5.52, 3.7, 0.46, { fill: C.accent, line: C.accent, color: C.dark, size: 11.5 });
-    T(s, "Buyer in Hamburg pays by card or bank.", 8.62, 6.08, 3.7, 0.24, { size: 8.5, color: C.mutedLight });
-    T(s, "The same page embeds on the seller's own site", 8.3, 6.44, 4.33, 0.28, { size: 9.5, color: C.mutedLight });
+    pill(s, "Pay USD 36,000", 8.62, 5.46, 3.7, 0.46, { fill: C.accent, line: C.accent, color: C.dark, size: 11.5 });
+    T(s, "Buyer in Hamburg pays by card or bank.", 8.62, 6.02, 3.7, 0.24, { size: 8.5, color: C.mutedLight });
+    T(s, "The same page embeds on the seller's own site", 8.3, 6.52, 4.33, 0.28, { size: 9.5, color: C.mutedLight });
 
     s.addNotes(
       "(~25s): No paid acquisition in year one. We start with the four businesses who already told us their problem, onboard them by hand, and settle real money at small value. They have offered six introductions between them; we waive a month of fees for each one that converts. Then distribution compounds on its own: every payment link an exporter sends puts Meridian in front of a buyer in Europe or the Gulf.",
@@ -569,7 +583,7 @@ function slide(dark) {
       { x: 8.84, icon: ["LuUserCheck", "LuUserPlus"], name: "Compliance lead", role: "HIRING WITH THIS ROUND", body: "Part-time, ex-bank AML. In place before the first live shilling." },
     ];
     for (const t of team) {
-      card(s, t.x, 2.5, 3.78, 3.1, { r: 0.12 });
+      card(s, t.x, 2.5, 3.78, 3.28, { r: 0.12 });
       shape(s, "ellipse", t.x + 0.34, 2.86, 0.92, 0.92, { fill: C.dark });
       if (t.initials) T(s, t.initials, t.x + 0.34, 2.84, 0.92, 0.92, { size: 20, color: C.cream, align: "ctr" });
       else s.addImage({ data: await icon(t.icon, C.accent), x: t.x + 0.58, y: 3.1, w: 0.44, h: 0.44 });
@@ -578,7 +592,7 @@ function slide(dark) {
       T(s, t.body, t.x + 0.34, 4.68, 3.1, 0.82, { size: 12.5, color: C.mutedLight, lsm: 1.18, valign: "top" });
     }
     T(s, "“The spec is written, the demos are built, and the customers are named. What is missing is the build.”",
-      0.7, 6.0, 11.93, 0.4, { size: 15, color: C.accentDeep });
+      0.7, 6.1, 11.93, 0.4, { size: 15, color: C.accentDeep });
 
     s.addNotes(
       "(~20s): Be straight about this: today it is me. I have shipped two B2B products for Kenyan businesses and I ran all five of these interviews myself. Bright advises on the market and brought us the inbound use case. The first hire this round funds is a part-time compliance lead, in place before we move a single live shilling. I am not pretending we are a team of ten.",
@@ -620,10 +634,10 @@ function slide(dark) {
     );
 
     card(s, 8.0, 2.55, 4.63, 2.45, { r: 0.14 });
-    T(s, "THE ONE ASSUMPTION", 8.35, 2.9, 4.0, 0.28, { size: 10, color: C.mutedLight, spc: 60 });
+    T(s, "THE ONE ASSUMPTION", 8.35, 2.9, 3.93, 0.28, { size: 10, color: C.mutedLight, spc: 60 });
     T(s, "500 active businesses by 2029, each moving KES 1.5M a month.",
-      8.35, 3.28, 3.95, 0.95, { size: 15, color: C.dark, lsm: 1.25, valign: "top" });
-    T(s, "Everything else is arithmetic. Challenge this number.", 8.35, 4.35, 3.95, 0.5, { size: 11.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
+      8.35, 3.28, 3.93, 0.95, { size: 15, color: C.dark, lsm: 1.25, valign: "top" });
+    T(s, "Everything else is arithmetic. Challenge this number.", 8.35, 4.3, 3.93, 0.45, { size: 11.5, color: C.mutedLight, lsm: 1.2, valign: "top" });
 
     card(s, 8.0, 5.25, 4.63, 1.45, { fill: C.dark, line: null, r: 0.14 });
     s.addText(
@@ -631,7 +645,7 @@ function slide(dark) {
         { text: "Burn $8K / month after hires", options: { fontSize: 15, color: C.cream, breakLine: true } },
         { text: "12 months runway on this raise", options: { fontSize: 13, color: C.mutedDark } },
       ],
-      { x: 8.35, y: 5.55, w: 4.0, h: 0.9, fontFace: F, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.3 },
+      { x: 8.35, y: 5.53, w: 3.93, h: 0.9, fontFace: F, bold: true, valign: "middle", isTextBox: true, margin: 0, lineSpacingMultiple: 1.3 },
     );
 
     s.addNotes(
@@ -654,9 +668,9 @@ function slide(dark) {
 
     T(s, "USE OF FUNDS", 0.7, 2.38, 5.0, 0.28, { size: 10, color: C.mutedDark, spc: 60 });
     const funds = [
-      { x: 0.7, w: 5.29, fill: C.accent, lbl: "Build & team · 45%", sub: "eight-week MVP, two hires", subColor: C.dark },
-      { x: 6.05, w: 3.53, fill: C.mid, lbl: "Compliance & legal · 30%", sub: "AML policy, KYB, partner terms", subColor: C.dark },
-      { x: 9.63, w: 2.94, fill: C.darkCardLine, lbl: "Float & ops · 25%", sub: "partner liquidity", subColor: C.cream },
+      { x: 0.7, w: 5.26, fill: C.accent, lbl: "Build & team · 45%", sub: "eight-week MVP, two hires", subColor: C.dark },
+      { x: 6.08, w: 3.51, fill: C.mid, lbl: "Compliance & legal · 30%", sub: "AML policy, KYB, partner terms", subColor: C.dark },
+      { x: 9.71, w: 2.92, fill: C.darkCardLine, lbl: "Float & ops · 25%", sub: "partner liquidity", subColor: C.cream },
     ];
     for (const f of funds) {
       shape(s, "rect", f.x, 3.1, f.w, 0.6, { fill: f.fill });
@@ -673,7 +687,7 @@ function slide(dark) {
     for (const m of miles) {
       card(s, m.x, 4.8, 3.78, 0.86, { fill: C.darkCard, line: C.darkCardLine, r: 0.12 });
       s.addImage({ data: await icon(m.ic, C.accent), x: m.x + 0.28, y: 5.02, w: 0.42, h: 0.42 });
-      T(s, m.t, m.x + 0.88, 4.8, 2.73, 0.86, { size: 14.5, color: C.cream });
+      T(s, m.t, m.x + 0.88, 4.8, 2.62, 0.86, { size: 14.5, color: C.cream });
     }
     T(s, "These milestones price the next round.", 0.7, 5.92, 8.0, 0.32, { size: 12.5, color: C.mutedDark });
     s.addText(
