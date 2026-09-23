@@ -1,1 +1,24 @@
-project_id = "fkloffoidgftjbldyhnu"
+# Local Supabase (npx supabase start). The hosted project is configured in its
+# dashboard; keep these auth settings and the email template in step with it.
+project_id = "meridian"
+
+[auth]
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://127.0.0.1:3000/auth/callback"]
+
+[auth.rate_limit]
+email_sent = 100
+
+[auth.email]
+enable_signup = true
+otp_length = 6
+otp_expiry = 3600
+
+# One template for both first sign-in and later ones: a 6-digit code plus a link.
+[auth.email.template.magic_link]
+subject = "Your Meridian sign-in code"
+content_path = "./supabase/templates/sign-in.html"
+
+[auth.email.template.confirmation]
+subject = "Your Meridian sign-in code"
+content_path = "./supabase/templates/sign-in.html"
