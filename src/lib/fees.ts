@@ -31,6 +31,8 @@ export const CURRENCIES: { code: Currency; name: string; symbol: string; perUsd:
   { code: "USD", name: "US Dollar", symbol: "$", perUsd: 1 },
 ];
 
+export const CURRENCY_CODES = CURRENCIES.map((c) => c.code) as [Currency, ...Currency[]];
+
 export function currency(code: Currency) {
   return CURRENCIES.find((c) => c.code === code) ?? CURRENCIES[0]!;
 }
@@ -49,11 +51,19 @@ export function convert(amount: number, from: Currency, to: Currency) {
   return usd * currency(to).perUsd;
 }
 
+export function round2(n: number) {
+  return Math.round((n + Number.EPSILON) * 100) / 100;
+}
+
+/** Meridian's own fee: 1% of the amount, rounded to cents. Everything else comes from the partner. */
+export function meridianFee(amount: number) {
+  return round2(amount * MERIDIAN_FEE);
+}
+
 export type Quote = {
   amount: number;
   partnerFee: number;
   meridianFee: number;
-  fxFee: number;
   totalFee: number;
   effectiveRate: number;
   netAfterFees: number;
@@ -65,16 +75,15 @@ export type Quote = {
 /** Collection quote: what a merchant nets when a customer pays them. */
 export function quoteCollection(amount: number, method: PayMethod): Quote {
   const partnerFee = amount * PARTNER_FEE[method];
-  const meridianFee = amount * MERIDIAN_FEE;
-  const totalFee = partnerFee + meridianFee;
+  const meridian = amount * MERIDIAN_FEE;
+  const totalFee = partnerFee + meridian;
   const traditionalFee = amount * 0.038;
   return {
     amount,
     partnerFee,
-    meridianFee,
-    fxFee: 0,
+    meridianFee: meridian,
     totalFee,
-    effectiveRate: totalFee / amount,
+    effectiveRate: amount > 0 ? totalFee / amount : 0,
     netAfterFees: amount - totalFee,
     recipientGets: amount - totalFee,
     traditionalFee,
@@ -90,29 +99,20 @@ export function quoteCrossBorder(
   payoutMethod: PayMethod,
 ): Quote {
   const partnerFee = amount * (PARTNER_FEE["bank"] + PARTNER_FEE[payoutMethod]) * 0.5;
-  const meridianFee = amount * MERIDIAN_FEE;
-  const fxFee = 0; // Meridian does not charge for conversion
-  const totalFee = partnerFee + meridianFee + fxFee;
+  const meridian = amount * MERIDIAN_FEE;
+  const totalFee = partnerFee + meridian; // Meridian does not charge for conversion
   const netAfterFees = amount - totalFee;
   const recipientGets = convert(netAfterFees, from, to);
   const traditionalFee = amount * 0.09; // 8-12% typical all-in cost today
   return {
     amount,
     partnerFee,
-    meridianFee,
-    fxFee,
+    meridianFee: meridian,
     totalFee,
-    effectiveRate: totalFee / amount,
+    effectiveRate: amount > 0 ? totalFee / amount : 0,
     netAfterFees,
     recipientGets,
     traditionalFee,
     saving: traditionalFee - totalFee,
   };
-}
-
-export function makeReference() {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  let out = "";
-  for (let i = 0; i < 8; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return `MRD-${out}`;
 }
