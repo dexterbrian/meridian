@@ -21,44 +21,44 @@ Compliance (Phase 2) comes before any real money (Phases 3 and 4) on purpose.
 ### Tasks
 
 **0.1 Project scaffold**
-- [ ] Create SolidStart TypeScript project. Strict mode. Tailwind v4. ESLint + Prettier from existing config.
-- [ ] Port `styles.css` design tokens and fonts.
-- [ ] Add Kobalte, lucide-solid, Zod, Supabase JS, Resend SDK, Vitest.
-- [ ] `package.json` name `meridian`. Replace README with a real one (setup, env, scripts).
-- [ ] Add `.env.example` with every variable from TRD 1.3.
+- [x] Create SolidStart TypeScript project. Strict mode. Tailwind v4. ESLint + Prettier from existing config. _SolidStart 2.0.5, Node 24._
+- [x] Port `styles.css` design tokens and fonts.
+- [x] Add Kobalte, lucide-solid, Zod, Supabase JS, Resend SDK, Vitest.
+- [x] `package.json` name `meridian`. Replace README with a real one (setup, env, scripts).
+- [x] Add `.env.example` with every variable from TRD 1.3.
 
 **0.2 Hosting spike**
-- [ ] 2-hour spike: implement Klasha AES-CBC encryption in Workers runtime with `js-md5`. Round-trip a known payload.
-- [ ] Decide Cloudflare Workers vs Railway. Record decision in TRD.
-- [ ] Deploy hello-world to staging. Set up custom domain.
+- [x] 2-hour spike: implement Klasha AES-CBC encryption in Workers runtime with `js-md5`. Round-trip a known payload. _Passed in local workerd and in Vitest._
+- [x] Decide Cloudflare Workers vs Railway. Record decision in TRD. _Workers. TRD 1.1._
+- [ ] Deploy hello-world to staging. Set up custom domain. _Open: needs a Cloudflare login and the domain. The Workers build is ready (`npm run build:workers`)._
 
 **0.3 Supabase**
-- [ ] Create dev project (or reuse). Upgrade prod project to Pro before Phase 3.
-- [ ] Migration: keep `waitlist_signups`, `contact_messages`, `demo_transactions`. Drop old `payment_requests` policies. Enable `pg_trgm`.
-- [ ] Server-side admin client in `src/server/supabase.ts`. Lint rule: service key import only under `src/server`.
-- [ ] Browser client with anon key.
+- [ ] Create dev project (or reuse). Upgrade prod project to Pro before Phase 3. _Open: the old Lovable project did not resolve from here. Local Supabase (`npx supabase start`) is set up and used for dev._
+- [x] Migration: keep `waitlist_signups`, `contact_messages`, `demo_transactions`. Drop old `payment_requests` policies. Enable `pg_trgm`. _Applied locally. Push to the hosted project with `npx supabase db push`._
+- [x] Server-side admin client in `src/server/supabase.ts`. Lint rule: service key import only under `src/server`.
+- [x] Browser client with anon key.
 
 **0.4 Auth**
-- [ ] Supabase email OTP sign-in page. Callback route. Session helper for server functions.
-- [ ] `/app/*` guard: redirect to sign-in without session. `/admin/*` guard: 404 without admin claim.
-- [ ] Set Brian's user `app_metadata.role = 'admin'` in dashboard. Document the step.
+- [x] Supabase email OTP sign-in page. Callback route. Session helper for server functions.
+- [x] `/app/*` guard: redirect to sign-in without session. `/admin/*` guard: 404 without admin claim.
+- [ ] Set Brian's user `app_metadata.role = 'admin'` in dashboard. Document the step. _Documented in the README. Setting it waits on the hosted project._
 
 **0.5 Email**
-- [ ] Verify sending domain in Resend.
-- [ ] `sendEmail()` with logging to `partner_calls` on failure and alert to `ADMIN_EMAIL`.
-- [ ] Templates: waitlist confirm, contact confirm, lead alert.
+- [ ] Verify sending domain in Resend. _Open: the Resend account has no domains yet. Needs DNS records on the sending domain._
+- [x] `sendEmail()` with logging to `partner_calls` on failure and alert to `ADMIN_EMAIL`. _`partner_calls` created early for this._
+- [x] Templates: waitlist confirm, contact confirm, lead alert.
 
 **0.6 Port public pages**
-- [ ] Landing page with the copy from this release. Pricing calculator without FX line.
-- [ ] Terms, Privacy. Remove hard-coded effective date; use a constant.
-- [ ] Three demos and `/pay/{ref}` demo mode writing to `demo_transactions` only.
-- [ ] Waitlist and contact forms via server functions with IP rate limit and internal lead email (M-06, M-08).
-- [ ] Site header, footer, demo banner.
+- [x] Landing page with the copy from this release. Pricing calculator without FX line.
+- [x] Terms, Privacy. Remove hard-coded effective date; use a constant.
+- [x] Three demos and `/pay/{ref}` demo mode writing to `demo_transactions` only.
+- [x] Waitlist and contact forms via server functions with IP rate limit and internal lead email (M-06, M-08).
+- [x] Site header, footer, demo banner.
 
 **0.7 Cleanup**
-- [ ] Delete TanStack sources, Lovable files, `@lovable.dev/*`, unused shadcn.
-- [ ] Disconnect Lovable from the GitHub repo. Remove the `AGENTS.md` Lovable block.
-- [ ] CI: lint, typecheck, test on push.
+- [x] Delete TanStack sources, Lovable files, `@lovable.dev/*`, unused shadcn.
+- [ ] Disconnect Lovable from the GitHub repo. Remove the `AGENTS.md` Lovable block. _Block removed. Disconnecting the Lovable GitHub app is still to do in GitHub settings._
+- [x] CI: lint, typecheck, test on push.
 
 ### Exit test
 - Staging URL serves landing, legal, three demos. Lighthouse mobile performance ≥ 85.

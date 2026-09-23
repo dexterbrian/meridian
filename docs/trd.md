@@ -31,7 +31,7 @@ No queue, no cache, no separate backend. Server functions call partners directly
 
 | Layer | Choice | Reason |
 |---|---|---|
-| Framework | SolidStart (latest stable), TypeScript strict | Owner decision. SSR for landing and pay pages. `"use server"` functions for partner calls. |
+| Framework | SolidStart 2 (2.0.5 at Phase 0) on Vite 8 and Nitro, TypeScript strict, Node 24+ | Owner decision. SSR for landing and pay pages. `"use server"` functions for partner calls. |
 | Styling | Tailwind CSS v4 | Already in use. Design tokens in `styles.css` carry over. |
 | UI primitives | Kobalte | Headless, accessible, Solid-native. Only import what is used: dialog, select, tabs, toast. |
 | Icons | lucide-solid | Same icon set as today. |
@@ -42,9 +42,11 @@ No queue, no cache, no separate backend. Server functions call partners directly
 | Email | Resend Node SDK | Direct. Templates are plain functions returning HTML strings. Verified sending domain required. |
 | Tests | Vitest | Unit tests for pure logic. No e2e in MVP. |
 | Lint / format | ESLint + Prettier | Carry over existing config. |
-| Hosting | **Recommend Cloudflare Workers** via Nitro preset. Fallback: Railway (Node). | Cheapest with built-in cron triggers. One caveat below. |
+| Hosting | **Cloudflare Workers** via the Nitro `cloudflare_module` preset (`npm run build:workers`). Decided in Phase 0. Railway (Node) stays the fallback; `npm run build` makes a Node server. | Cheapest with built-in cron triggers. Caveat resolved below. |
 
-**Hosting caveat.** Klasha requires request bodies encrypted with AES-256-CBC using OpenSSL's `EVP_BytesToKey` derivation (MD5-based). Workers have WebCrypto for AES-CBC but no MD5. Use a small pure-JS MD5 (e.g. `js-md5`) for key derivation. If this proves awkward in Phase 4, move to Railway. Decide at Phase 0 with a spike.
+**Hosting caveat.** Klasha requires request bodies encrypted with AES-256-CBC using OpenSSL's `EVP_BytesToKey` derivation (MD5-based). Workers have WebCrypto for AES-CBC but no MD5. Use a small pure-JS MD5 (e.g. `js-md5`) for key derivation. If this proves awkward in Phase 4, move to Railway.
+
+**Decision (Phase 0 spike, 23 September 2026): Cloudflare Workers.** `src/server/partners/klasha-crypto.ts` does AES-256-CBC with WebCrypto and derives key and IV with `js-md5`. It was run inside the local Workers runtime (workerd via `wrangler dev`): it matched the OpenSSL CLI byte for byte with a fixed salt, decrypted a payload OpenSSL made, and round-tripped with a random salt. The same checks run in Vitest on every push. Klasha encryption is no longer a reason to leave Workers.
 
 ### 1.2 Environments
 
@@ -598,5 +600,5 @@ Manual test plan per phase in [phases.md](./phases.md).
 2. Kotani bank payout for KES: is `cross-boarder/invoice` the right endpoint, or is a KES `withdraw/bank` available on request?
 3. Kotani fee arrangement per wallet (customer pays vs Meridian pays). Affects whether `total_charged` includes the deposit fee or the partner nets it.
 4. Klasha webhook authenticity: any signature header not in the docs? Otherwise status-API confirmation stands.
-5. Cloudflare Workers vs Node host: settle with a 2-hour spike on Klasha encryption in Phase 0.
+5. ~~Cloudflare Workers vs Node host.~~ Settled in Phase 0: Workers. See 1.1.
 6. Supabase plan: Free has no PITR and pauses after inactivity. Pro (USD 25/month) before any live money.
