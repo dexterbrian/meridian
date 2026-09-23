@@ -551,7 +551,7 @@ function slide(dark) {
     pill(s, "PAYMENT LINK", 10.9, 2.9, 1.42, 0.3, { fill: C.tintAccent, line: C.tintAccent, color: C.accentDeep, size: 8 });
     T(s, "Kilimo Fresh Exports Ltd", 8.62, 3.36, 3.7, 0.26, { size: 9.5, color: C.mutedLight });
     T(s, "USD 36,000", 8.62, 3.6, 3.7, 0.5, { size: 24, color: C.dark });
-    T(s, "Invoice INV-2048 · avocado shipment, week 38", 8.62, 4.04, 3.7, 0.24, { size: 9, color: C.mutedLight });
+    T(s, "Invoice INV-2048 · avocado shipment, week 38", 8.62, 4.1, 3.7, 0.24, { size: 9, color: C.mutedLight });
     const chips = [["Bank", 8.62], ["Card", 9.9], ["M-Pesa", 11.18]];
     for (const [t, cx] of chips) pill(s, t, cx, 4.34, 1.14, 0.34, { fill: C.light, line: C.border, color: C.dark, size: 9 });
     s.addText(
