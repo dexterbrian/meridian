@@ -10,11 +10,12 @@ Cleaned-up notes from discovery interviews with Kenyan business owners about cro
 | **Richard** | Imports electronics (phones, laptops, custom PCs, accessories). Since 2020. | Pays foreign suppliers | US (99%), Europe, China | Not stated. Container fills in about a week, ships via London, 2 weeks to Kenya. | Card and PayPal to supplier: instant. | Client to him: Pesalink / RTGS in KES. Him: KES to his own StanChart USD account, under KES 50 per transfer. Supplier: card, or PayPal for known suppliers (over KES 100 per transaction). | Used to be a problem. Solved two years ago by opening a StanChart account. Any remaining pain is on his customers' side. | Yes. | Yes. Knows some people. |
 | **Phillip** | Car importer | Pays foreign suppliers | Japan | About 5 imports a year. KES 900k to 1.2M each plus tax (January 2026). | 12 to 24 hours. | Could not recall percentage cost. Payment converted USD to JPY. | Not stated. | Yes. | Yes. Will introduce a higher-volume car importer who would justify using the service. |
 | **McLoud Givondo** | Hardware importer. Mix of stock orders and client-specific orders. | Pays foreign suppliers. Also receives USD from some clients. | China (about 80%), Singapore, Hong Kong, Dubai, UK | Stock orders from about KES 2M. Client orders KES 50k to 100k, up to 300k to 2M+. Bulk orders cover 2 to 3 months. | Equity Bank and Co-operative Bank: 4 to 5 days to reflect and confirm. Manufacturing (14-day lead time) does not start until payment lands. | 8 to 10% in fees. KES account gives poor FX and extra fees. Workaround: withdraw cash, exchange with a known Forex agent for a better rate. | Delays cause stockouts. Physical cash movement is risky and slow. Banks are opaque, hard to track a payment. | Yes, "without thinking", if security and reliability match. 40% lower fees plus faster settlement is the switch trigger. Would keep USD account for receiving, use new system for sending. | Yes. Will introduce 1 to 2 importers. Agreed to share exact transaction data (amount, fees, timeline) for a savings simulation. |
+| **Ann** | Flower exporter. Brief first chat only (September 2026). Full interview not yet done. | Receives from foreign buyers | Ghana, Nigeria, Namibia, Côte d'Ivoire and other African countries | Not stated. | Bank transfers take 1 to 3 working days to clear. | Not stated. | Loses money on FX at times. Slow bank clearing. | Not asked yet. | Not asked yet. |
 | **Bright** | Advisor. Runs cybersecurity events / courses. | Receives from foreign clients | South Sudan, Sierra Leone, Nigeria | Not stated. | Not stated. | Not stated. | A South Sudan client had to travel to Nairobi to pay in person. Knows a flower exporter with the same problem. Has heard people in Sierra Leone and Nigeria asking how to send money to Kenya. | n/a | Flower exporter (name not captured). |
 
 ## 2. Scripted question responses
 
-Questions from the interview script. Only Chris and Richard were asked the full script.
+Questions from the interview script. Only Chris and Richard were asked the full script. Ann is not in this table yet. She has only had a brief first chat.
 
 | Question | Chris | Richard | Phillip | McLoud |
 |---|---|---|---|---|
@@ -48,8 +49,8 @@ Points recorded during or after the conversations, not interviewee statements.
 
 1. **Most interviewees import from outside Africa.** US, China, Japan, UK, Dubai. The current site pitches Africa-to-Africa corridors. This is a positioning gap to resolve.
 2. **Pain splits by bank.** Richard (StanChart) has no pain. McLoud (Equity, Co-op) has 4 to 5 day delays and 8 to 10% cost. Target segment may be importers on mid-tier banks.
-3. **Speed matters as much as cost.** Chris and McLoud both lose money downstream (cold storage, stockouts) when payments are late.
-4. **Inbound collection is a second use case.** Chris and Bright both describe foreign clients struggling to pay Kenyan businesses.
+3. **Speed matters as much as cost.** Chris and McLoud both lose money downstream (cold storage, stockouts) when payments are late. Ann waits 1 to 3 working days for bank transfers to clear.
+4. **Inbound collection is a second use case.** Chris, Ann and Bright all describe foreign clients struggling to pay Kenyan businesses. Ann's buyers are in other African countries (Ghana, Nigeria, Namibia, Côte d'Ivoire). FX loss comes up for both exporters, Chris and Ann.
 5. **Trust is the gate.** Every importer said they would switch, but only if funds are safe. Security assurances and early-adopter proof come before features.
 6. **KYB/AML friction is a product opportunity.** Banks lose days on document checks. Faster compliance is a differentiator, not just a requirement.
 
@@ -64,3 +65,4 @@ Points recorded during or after the conversations, not interviewee statements.
 | Phillip | Introduce higher-volume car importer. | Open |
 | Richard | Introduce contacts. | Open |
 | Bright | Name of the flower exporter. | Open |
+| Brian | Full interview with Ann (volumes, cost today, how buyers pay, would she switch, referrals). | Open |
