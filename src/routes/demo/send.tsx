@@ -135,26 +135,24 @@ export default function SendDemo() {
                     </select>
                   </label>
                 </div>
-                <label class="block text-xs text-muted-foreground">
-                  Amount
-                  <input
-                    type="number"
-                    min={1}
-                    value={amount()}
-                    onInput={(e) => setAmount(Number(e.currentTarget.value))}
-                    class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                  />
-                </label>
+                <input
+                  type="number"
+                  min={1}
+                  aria-label="Amount"
+                  placeholder="Amount"
+                  value={amount()}
+                  onInput={(e) => setAmount(Number(e.currentTarget.value))}
+                  class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+                />
                 <div class="grid gap-4 sm:grid-cols-2">
-                  <label class="text-xs text-muted-foreground">
-                    Supplier
-                    <input
-                      required
-                      value={recipient()}
-                      onInput={(e) => setRecipient(e.currentTarget.value)}
-                      class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                    />
-                  </label>
+                  <input
+                    required
+                    aria-label="Supplier"
+                    placeholder="Supplier"
+                    value={recipient()}
+                    onInput={(e) => setRecipient(e.currentTarget.value)}
+                    class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 self-end"
+                  />
                   <label class="text-xs text-muted-foreground">
                     Payout method
                     <select
@@ -167,16 +165,16 @@ export default function SendDemo() {
                     </select>
                   </label>
                 </div>
-                <label class="block text-xs text-muted-foreground">
-                  Your email (for the confirmation)
-                  <input
-                    required
-                    type="email"
-                    value={email()}
-                    onInput={(e) => setEmail(e.currentTarget.value)}
-                    class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                  />
-                </label>
+                <input
+                  required
+                  type="email"
+                  autocomplete="email"
+                  aria-label="Your email for the confirmation"
+                  placeholder="Your email for the confirmation"
+                  value={email()}
+                  onInput={(e) => setEmail(e.currentTarget.value)}
+                  class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+                />
 
                 <Show
                   when={stage() >= 0}

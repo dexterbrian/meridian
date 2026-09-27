@@ -72,16 +72,15 @@ export default function SignIn() {
                   We'll email you a one-time code. No password needed.
                 </p>
               </div>
-              <label class="block text-xs font-medium text-muted-foreground">
-                Work email
-                <input
-                  type="email"
-                  required
-                  autocomplete="email"
-                  name="email"
-                  class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
-                />
-              </label>
+              <input
+                type="email"
+                required
+                autocomplete="email"
+                name="email"
+                aria-label="Work email"
+                placeholder="Work email"
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+              />
               <button
                 type="submit"
                 disabled={busy()}
@@ -101,16 +100,15 @@ export default function SignIn() {
                 click the link in the email.
               </p>
             </div>
-            <label class="block text-xs font-medium text-muted-foreground">
-              Code
-              <input
-                inputmode="numeric"
-                autocomplete="one-time-code"
-                required
-                name="code"
-                class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-lg tracking-[0.3em] text-foreground"
-              />
-            </label>
+            <input
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              required
+              name="code"
+              aria-label="Code"
+              placeholder="Code"
+              class="w-full rounded-lg border border-input bg-background px-3 py-2 font-mono text-lg tracking-[0.3em] text-foreground placeholder:font-sans placeholder:text-sm placeholder:tracking-normal placeholder:text-muted-foreground/70"
+            />
             <button
               type="submit"
               disabled={busy()}

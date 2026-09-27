@@ -79,69 +79,61 @@ export default function RequestDemo() {
         <div class="mt-8 grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
           <form onSubmit={create} class="panel space-y-4 p-6">
             <div class="grid gap-4 sm:grid-cols-2">
-              <label class="text-xs text-muted-foreground">
-                Your business
-                <input
-                  required
-                  value={fromBusiness()}
-                  onInput={(e) => setFromBusiness(e.currentTarget.value)}
-                  class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                />
-              </label>
-              <label class="text-xs text-muted-foreground">
-                Who is paying you
-                <input
-                  required
-                  value={toBusiness()}
-                  onInput={(e) => setToBusiness(e.currentTarget.value)}
-                  class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                />
-              </label>
-              <label class="text-xs text-muted-foreground">
-                Currency
-                <select
-                  value={currencyCode()}
-                  onChange={(e) => setCurrencyCode(e.currentTarget.value as Currency)}
-                  class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
-                >
-                  <For each={CURRENCIES}>
-                    {(c) => (
-                      <option value={c.code} selected={c.code === currencyCode()}>
-                        {c.code} — {c.name}
-                      </option>
-                    )}
-                  </For>
-                </select>
-              </label>
-              <label class="text-xs text-muted-foreground">
-                Amount
-                <input
-                  type="number"
-                  min={1}
-                  value={amount()}
-                  onInput={(e) => setAmount(Number(e.currentTarget.value))}
-                  class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                />
-              </label>
+              <input
+                required
+                aria-label="Your business"
+                placeholder="Your business"
+                value={fromBusiness()}
+                onInput={(e) => setFromBusiness(e.currentTarget.value)}
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+              />
+              <input
+                required
+                aria-label="Who is paying you"
+                placeholder="Who is paying you"
+                value={toBusiness()}
+                onInput={(e) => setToBusiness(e.currentTarget.value)}
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+              />
+              <select
+                aria-label="Currency"
+                value={currencyCode()}
+                onChange={(e) => setCurrencyCode(e.currentTarget.value as Currency)}
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+              >
+                <For each={CURRENCIES}>
+                  {(c) => (
+                    <option value={c.code} selected={c.code === currencyCode()}>
+                      {c.code} — {c.name}
+                    </option>
+                  )}
+                </For>
+              </select>
+              <input
+                type="number"
+                min={1}
+                aria-label="Amount"
+                placeholder="Amount"
+                value={amount()}
+                onInput={(e) => setAmount(Number(e.currentTarget.value))}
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+              />
             </div>
-            <label class="block text-xs text-muted-foreground">
-              What is this for?
-              <input
-                value={memo()}
-                onInput={(e) => setMemo(e.currentTarget.value)}
-                class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              />
-            </label>
-            <label class="block text-xs text-muted-foreground">
-              Email the request to (optional)
-              <input
-                type="email"
-                value={toEmail()}
-                onInput={(e) => setToEmail(e.currentTarget.value)}
-                placeholder="accounts@nordfrucht.de"
-                class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-              />
-            </label>
+            <input
+              aria-label="What is this for?"
+              placeholder="What is this for?"
+              value={memo()}
+              onInput={(e) => setMemo(e.currentTarget.value)}
+              class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+            />
+            <input
+              type="email"
+              aria-label="Email the request to (optional)"
+              placeholder="Email the request to (optional), e.g. accounts@nordfrucht.de"
+              value={toEmail()}
+              onInput={(e) => setToEmail(e.currentTarget.value)}
+              class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+            />
             <button
               type="submit"
               disabled={busy()}

@@ -379,16 +379,15 @@ function Pricing() {
                 </For>
               </select>
             </label>
-            <label class="block text-xs text-muted-foreground sm:col-span-2">
-              Amount
-              <input
-                type="number"
-                min={0}
-                value={amount()}
-                onInput={(e) => setAmount(Number(e.currentTarget.value))}
-                class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground"
-              />
-            </label>
+            <input
+              type="number"
+              min={0}
+              aria-label="Amount"
+              placeholder="Amount"
+              value={amount()}
+              onInput={(e) => setAmount(Number(e.currentTarget.value))}
+              class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70 self-end sm:col-span-2"
+            />
             <label class="block text-xs text-muted-foreground sm:col-span-3">
               They receive in
               <select
@@ -563,18 +562,14 @@ function Waitlist() {
                   "Over $1M",
                 ]}
               />
-              <div>
-                <label class="text-xs font-medium text-muted-foreground" for="pain_point">
-                  Who do you pay, or who pays you, across borders?
-                </label>
-                <textarea
-                  id="pain_point"
-                  name="pain_point"
-                  rows={3}
-                  placeholder="e.g. We pay a hardware factory in China every month. Equity takes 5 days."
-                  class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                />
-              </div>
+              <textarea
+                id="pain_point"
+                name="pain_point"
+                rows={3}
+                aria-label="Who do you pay, or who pays you, across borders?"
+                placeholder="Who do you pay, or who pays you, across borders? e.g. We pay a hardware factory in China every month. Equity takes 5 days."
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+              />
               <button
                 type="submit"
                 disabled={busy()}
@@ -664,18 +659,15 @@ function Contact() {
                 <Field name="company" label="Company" />
                 <Field name="subject" label="Subject" placeholder="Partnership" />
               </div>
-              <div>
-                <label class="text-xs font-medium text-muted-foreground" for="message">
-                  Message
-                </label>
-                <textarea
-                  id="message"
-                  name="message"
-                  rows={4}
-                  required
-                  class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-                />
-              </div>
+              <textarea
+                id="message"
+                name="message"
+                rows={4}
+                required
+                aria-label="Message"
+                placeholder="Message"
+                class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+              />
               <button
                 type="submit"
                 disabled={busy()}
@@ -772,19 +764,15 @@ function Field(props: {
   placeholder?: string;
 }) {
   return (
-    <div>
-      <label class="text-xs font-medium text-muted-foreground" for={props.name}>
-        {props.label}
-      </label>
-      <input
-        id={props.name}
-        name={props.name}
-        type={props.type ?? "text"}
-        required={props.required}
-        placeholder={props.placeholder}
-        class="mt-1 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
-      />
-    </div>
+    <input
+      id={props.name}
+      name={props.name}
+      type={props.type ?? "text"}
+      required={props.required}
+      aria-label={props.label}
+      placeholder={props.placeholder ? `${props.label}, e.g. ${props.placeholder}` : props.label}
+      class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/70"
+    />
   );
 }
 
