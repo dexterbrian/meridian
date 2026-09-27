@@ -95,8 +95,24 @@ function grossUp(amount: number, partnerRate: number) {
   };
 }
 
-/** Collection quote: the customer pays the fees on top, so the merchant gets the full amount. */
-export function quoteCollection(amount: number, method: PayMethod): Quote {
+/**
+ * Collection quote: the customer pays the fees on top, so the merchant gets the full amount.
+ * With no method picked yet there are no fees to show, so the payer total is just the amount.
+ */
+export function quoteCollection(amount: number, method: PayMethod | null): Quote {
+  if (!method) {
+    return {
+      amount,
+      partnerFee: 0,
+      meridianFee: 0,
+      totalFee: 0,
+      effectiveRate: 0,
+      payerPays: amount,
+      recipientGets: amount,
+      traditionalFee: amount * 0.038,
+      saving: 0,
+    };
+  }
   const fees = grossUp(amount, PARTNER_FEE[method]);
   const traditionalFee = amount * 0.038;
   return {

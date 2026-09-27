@@ -49,6 +49,13 @@ describe("demo quotes", () => {
     }
   });
 
+  it("collection: no fees until a method is picked", () => {
+    const q = quoteCollection(36000, null);
+    expect(q.totalFee).toBe(0);
+    expect(q.payerPays).toBe(36000);
+    expect(q.recipientGets).toBe(36000);
+  });
+
   it("collection with zero amount has no NaN", () => {
     expect(quoteCollection(0, "card").effectiveRate).toBe(0);
   });
