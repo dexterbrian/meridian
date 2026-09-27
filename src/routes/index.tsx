@@ -121,8 +121,8 @@ function Hero() {
           </div>
           <div class="mt-6 space-y-4">
             <div class="rounded-xl border border-border bg-surface/60 p-4">
-              <p class="text-xs text-muted-foreground">Nairobi, Kenya — you send</p>
-              <p class="font-display text-3xl font-semibold">KSh 1,500,000</p>
+              <p class="text-xs text-muted-foreground">Nairobi, Kenya — you pay</p>
+              <p class="font-display text-3xl font-semibold">KSh 1,530,612</p>
             </div>
             <div class="meridian-line pl-5 text-sm text-muted-foreground">
               <p>Compliance checks cleared</p>
@@ -133,7 +133,8 @@ function Hero() {
               <p class="text-xs text-muted-foreground">Shenzhen, China — supplier receives</p>
               <p class="font-display text-3xl font-semibold text-primary">¥ 82,400</p>
               <p class="mt-1 text-xs text-muted-foreground">
-                Total cost KSh 30,000 (2%). Your bank would take 8 to 10%.
+                The full KSh 1,500,000. Fees of KSh 30,612 (2%) paid on top. Your bank would take 8
+                to 10%.
               </p>
             </div>
           </div>

@@ -1,5 +1,6 @@
 // Indicative demo pricing model.
 // Partner (infrastructure) fees are the rails cost; Meridian adds a flat 1% on top.
+// The payer covers all fees on top of the amount, so the recipient gets the full amount.
 // Meridian charges nothing for FX. The partner's quoted rate is used as-is.
 // Demo conversion uses fixed reference rates below; the real product uses the partner quote.
 
@@ -66,53 +67,60 @@ export type Quote = {
   meridianFee: number;
   totalFee: number;
   effectiveRate: number;
-  netAfterFees: number;
+  /** Amount plus all fees. What the payer is charged. */
+  payerPays: number;
   recipientGets: number;
   traditionalFee: number;
   saving: number;
 };
 
-/** Collection quote: what a merchant nets when a customer pays them. */
-export function quoteCollection(amount: number, method: PayMethod): Quote {
-  const partnerFee = amount * PARTNER_FEE[method];
-  const meridian = amount * MERIDIAN_FEE;
-  const totalFee = partnerFee + meridian;
-  const traditionalFee = amount * 0.038;
+/**
+ * Fees are charged on what the payer pays, not on the amount. So the amount is
+ * grossed up: payerPays = amount / (1 - total rate). The partner fee takes the
+ * rounding remainder so payerPays - fees is exactly the amount.
+ */
+function grossUp(amount: number, partnerRate: number) {
+  const payerPays = amount > 0 ? round2(amount / (1 - partnerRate - MERIDIAN_FEE)) : 0;
+  const meridian = meridianFee(payerPays);
+  const partnerFee = round2(payerPays - amount - meridian);
+  const totalFee = round2(partnerFee + meridian);
   return {
-    amount,
+    payerPays,
     partnerFee,
     meridianFee: meridian,
     totalFee,
-    effectiveRate: amount > 0 ? totalFee / amount : 0,
-    netAfterFees: amount - totalFee,
-    recipientGets: amount - totalFee,
-    traditionalFee,
-    saving: traditionalFee - totalFee,
+    effectiveRate: payerPays > 0 ? totalFee / payerPays : 0,
   };
 }
 
-/** Cross-border quote: what a recipient in another market receives. */
+/** Collection quote: the customer pays the fees on top, so the merchant gets the full amount. */
+export function quoteCollection(amount: number, method: PayMethod): Quote {
+  const fees = grossUp(amount, PARTNER_FEE[method]);
+  const traditionalFee = amount * 0.038;
+  return {
+    amount,
+    ...fees,
+    recipientGets: amount,
+    traditionalFee,
+    saving: traditionalFee - fees.totalFee,
+  };
+}
+
+/** Cross-border quote: the sender pays the fees on top, so the recipient gets the full amount converted. */
 export function quoteCrossBorder(
   amount: number,
   from: Currency,
   to: Currency,
   payoutMethod: PayMethod,
 ): Quote {
-  const partnerFee = amount * (PARTNER_FEE["bank"] + PARTNER_FEE[payoutMethod]) * 0.5;
-  const meridian = amount * MERIDIAN_FEE;
-  const totalFee = partnerFee + meridian; // Meridian does not charge for conversion
-  const netAfterFees = amount - totalFee;
-  const recipientGets = convert(netAfterFees, from, to);
+  // Meridian does not charge for conversion
+  const fees = grossUp(amount, (PARTNER_FEE["bank"] + PARTNER_FEE[payoutMethod]) * 0.5);
   const traditionalFee = amount * 0.09; // 8-12% typical all-in cost today
   return {
     amount,
-    partnerFee,
-    meridianFee: meridian,
-    totalFee,
-    effectiveRate: amount > 0 ? totalFee / amount : 0,
-    netAfterFees,
-    recipientGets,
+    ...fees,
+    recipientGets: convert(amount, from, to),
     traditionalFee,
-    saving: traditionalFee - totalFee,
+    saving: traditionalFee - fees.totalFee,
   };
 }

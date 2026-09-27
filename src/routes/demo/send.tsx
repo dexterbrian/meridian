@@ -185,7 +185,7 @@ export default function SendDemo() {
                       type="submit"
                       class="w-full rounded-full bg-flow px-6 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90"
                     >
-                      Send {formatMoney(amount() || 0, from())}
+                      Send {formatMoney(quote().payerPays, from())}
                     </button>
                   }
                 >

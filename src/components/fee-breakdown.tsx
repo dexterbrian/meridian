@@ -38,6 +38,7 @@ export function FeeBreakdown(props: {
   currencyCode: Currency;
   receiveCurrency?: Currency;
   netLabel?: string;
+  payLabel?: string;
 }) {
   const receive = () => props.receiveCurrency ?? props.currencyCode;
   return (
@@ -60,6 +61,12 @@ export function FeeBreakdown(props: {
         <FeeRow
           label={`Total cost (${(props.quote.effectiveRate * 100).toFixed(2)}%)`}
           value={formatMoney(props.quote.totalFee, props.currencyCode)}
+          emphasis
+        />
+        <FeeRow
+          label={props.payLabel ?? "You pay"}
+          hint="Amount plus fees"
+          value={formatMoney(props.quote.payerPays, props.currencyCode)}
           emphasis
         />
         <FeeRow

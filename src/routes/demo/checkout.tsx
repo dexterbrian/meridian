@@ -182,7 +182,7 @@ export default function CheckoutDemo() {
                   disabled={busy()}
                   class="w-full rounded-full bg-flow px-6 py-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-60"
                 >
-                  {busy() ? "Processing…" : `Pay ${formatMoney(amount() || 0, currencyCode())}`}
+                  {busy() ? "Processing…" : `Pay ${formatMoney(quote().payerPays, currencyCode())}`}
                 </button>
                 <p class="text-center text-xs text-muted-foreground">
                   Simulated payment. Nothing is charged.
@@ -211,8 +211,8 @@ export default function CheckoutDemo() {
               <CheckCircle2 class="mx-auto h-12 w-12 text-success" />
               <h1 class="mt-4 font-display text-2xl font-bold">Paid</h1>
               <p class="mt-2 text-sm text-muted-foreground">
-                {formatMoney(amount(), currencyCode())} paid to {MERCHANT}. Receipt sent to{" "}
-                {email()}.
+                You paid {formatMoney(quote().payerPays, currencyCode())}. {MERCHANT} receives{" "}
+                {formatMoney(quote().recipientGets, currencyCode())}. Receipt sent to {email()}.
               </p>
               <p class="mt-4 font-mono text-sm text-primary">{p().reference}</p>
               <button

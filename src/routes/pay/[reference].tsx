@@ -167,7 +167,10 @@ export default function PayRequest() {
                     >
                       {busy()
                         ? "Processing…"
-                        : `Pay ${formatMoney(data().amount, data().currency)}`}
+                        : `Pay ${formatMoney(
+                            quoteCollection(data().amount, method()).payerPays,
+                            data().currency,
+                          )}`}
                     </button>
                     <p class="flex items-center justify-center gap-2 text-xs text-muted-foreground">
                       <ShieldCheck class="h-3.5 w-3.5" /> Simulated payment. Nothing is charged.
