@@ -24,7 +24,7 @@ export type Currency = "NGN" | "KES" | "GHS" | "ZAR" | "UGX" | "TZS" | "USD";
 
 export const CURRENCIES: { code: Currency; name: string; symbol: string; perUsd: number }[] = [
   { code: "NGN", name: "Nigerian Naira", symbol: "₦", perUsd: 1530 },
-  { code: "KES", name: "Kenyan Shilling", symbol: "KSh", perUsd: 129 },
+  { code: "KES", name: "Kenyan Shilling", symbol: "KES", perUsd: 129 },
   { code: "GHS", name: "Ghanaian Cedi", symbol: "GH₵", perUsd: 15.2 },
   { code: "ZAR", name: "South African Rand", symbol: "R", perUsd: 18.1 },
   { code: "UGX", name: "Ugandan Shilling", symbol: "USh", perUsd: 3760 },
@@ -41,7 +41,9 @@ export function currency(code: Currency) {
 export function formatMoney(amount: number, code: Currency) {
   const c = currency(code);
   const decimals = c.perUsd > 500 ? 0 : 2;
-  return `${c.symbol}${amount.toLocaleString("en-US", {
+  // A currency code used as the symbol (KES) needs a space: "KES 1,500.00".
+  const prefix = /^[A-Z]{3}$/.test(c.symbol) ? `${c.symbol} ` : c.symbol;
+  return `${prefix}${amount.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   })}`;

@@ -66,6 +66,6 @@ describe("demo quotes", () => {
 describe("formatMoney", () => {
   it("drops decimals for large-unit currencies", () => {
     expect(formatMoney(1500000, "NGN")).toBe("₦1,500,000");
-    expect(formatMoney(1500, "KES")).toBe("KSh1,500.00");
+    expect(formatMoney(1500, "KES")).toBe("KES 1,500.00");
   });
 });
