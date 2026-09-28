@@ -4,7 +4,8 @@ import { nitro } from "nitro/vite";
 import { solidStart } from "@solidjs/start/config";
 import tailwindcss from "@tailwindcss/vite";
 
-// `vite build` targets Node. `vite build --mode workers` targets Cloudflare Workers.
+// `vite build` targets Node. `vite build --mode vercel` targets Vercel (the
+// production host, see TRD 1.1). `vite build --mode workers` targets Cloudflare Workers.
 export default defineConfig(({ command, mode }) => {
   // In dev, make .env / .env.local visible to server code through process.env.
   // In production the host provides the variables.
@@ -38,7 +39,9 @@ const config = (mode: string) => ({
             preset: "cloudflare_module",
             cloudflare: { deployConfig: true, nodeCompat: true },
           }
-        : {},
+        : mode === "vercel"
+          ? { preset: "vercel" }
+          : {},
     ),
   ],
 });

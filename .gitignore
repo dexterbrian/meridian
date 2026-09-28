@@ -37,3 +37,7 @@ dist-ssr
 # Supabase CLI
 supabase/.temp
 supabase/.branches
+
+# Vercel build output
+.vercel
+

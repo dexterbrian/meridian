@@ -28,7 +28,17 @@ const serviceKeyRule = {
 };
 
 export default tseslint.config(
-  { ignores: ["dist", ".output", ".vinxi", ".nitro", "node_modules", "src/lib/database.types.ts"] },
+  {
+    ignores: [
+      "dist",
+      ".output",
+      ".vercel",
+      ".vinxi",
+      ".nitro",
+      "node_modules",
+      "src/lib/database.types.ts",
+    ],
+  },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
