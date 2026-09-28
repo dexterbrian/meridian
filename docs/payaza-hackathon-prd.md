@@ -216,6 +216,7 @@ IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time a
 | H-02 | Business profile: name, country, contact | Must | Done (`/app/onboarding`) |
 | H-03 | Payout account in the business's chosen currency (KES, UGX, TZS, NGN, GHS, ZAR, ZMW, XAF, LRD, CDF), mobile money or bank, name checked with Payaza account name enquiry. Several accounts per currency allowed (e.g. M-Pesa and bank, both KES); one is the default and receives that currency's payouts. Accounts can be edited; the currency is fixed once created. | Must | Done. Name match enforced in live mode; the sandbox returns a canned name, so there it is shown as a warning. |
 | H-04 | Create a payment request: amount, currency, **invoice number**, note, single or multi use | Must | Done, plus optional expiry and payer email |
+| H-09 | Edit a payment request while it is active. Invoice number, note, payer email and expiry can always change. Amount, currency and usage lock once a payer has started paying. | Must | Done |
 | H-05 | Share the link by copy, email or WhatsApp | Must | Done |
 | H-06 | Dashboard: requests, status, invoice number, reference, who paid, payout status | Must | Done, with a per-attempt timeline on the request page |
 | H-07 | Search the dashboard by invoice number or Meridian reference | Should | Done |

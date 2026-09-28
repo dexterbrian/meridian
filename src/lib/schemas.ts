@@ -120,6 +120,19 @@ export const paymentRequestSchema = z.object({
 });
 export type PaymentRequestInput = z.input<typeof paymentRequestSchema>;
 
+export const paymentRequestUpdateSchema = z.object({
+  reference: referenceSchema,
+  amount,
+  currency,
+  invoice_number: optionalText(64),
+  memo: optionalText(500),
+  payer_email: z.union([z.email("Enter a valid email").max(254), z.literal("")]).default(""),
+  usage: z.enum(["single", "multi"]),
+  /** Days until the link stops working. 0 = never, -1 = keep the current expiry. */
+  expires_in_days: z.number().int().min(-1).max(365).default(-1),
+});
+export type PaymentRequestUpdateInput = z.input<typeof paymentRequestUpdateSchema>;
+
 /* -------------------------------- pay page -------------------------------- */
 
 export const startPaymentSchema = z.object({

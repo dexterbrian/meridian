@@ -7,12 +7,15 @@ import type { Tables } from "~/lib/database.types";
 import { formatMoney, isCurrency, type Currency } from "~/lib/fees";
 import { COUNTRY_NAMES, ISO3, findNetwork } from "~/lib/payaza-codes";
 import { makeReference } from "~/lib/reference";
+import { expiryFrom, requestEditRules } from "~/lib/request-edit";
 import {
   businessProfileSchema,
   paymentRequestSchema,
+  paymentRequestUpdateSchema,
   payoutAccountSchema,
   type BusinessProfileInput,
   type PaymentRequestInput,
+  type PaymentRequestUpdateInput,
   type PayoutAccountInput,
 } from "~/lib/schemas";
 import type { TransactionStatus } from "~/lib/status";
@@ -411,6 +414,67 @@ export async function getPaymentRequest(reference: string): Promise<RequestDetai
     })),
     url: `${requestOrigin()}/pay/${request.reference}`,
   };
+}
+
+/**
+ * Edits a payment request. Labels (invoice number, note, payer email, expiry)
+ * can change while it is active. Amount, currency and usage only until a payer
+ * starts paying (request-edit.ts). The database update repeats both conditions,
+ * so an attempt that starts mid-edit wins and the edit is refused.
+ */
+export async function updatePaymentRequest(
+  input: PaymentRequestUpdateInput,
+): Promise<ActionResult<{ request: PaymentRequest }>> {
+  const parsed = paymentRequestUpdateSchema.safeParse(input);
+  if (!parsed.success) return invalid(parsed.error);
+  if (!allowRequest("business")) return { ok: false, error: RATE_LIMITED };
+  const business = await requireBusiness();
+  const d = parsed.data;
+
+  const { data: current } = await db()
+    .from("payment_requests")
+    .select()
+    .eq("business_id", business.id)
+    .eq("reference", d.reference)
+    .maybeSingle();
+  if (!current) return { ok: false, error: "Request not found." };
+
+  const rules = requestEditRules(current);
+  if (!rules.canEdit) return { ok: false, error: rules.reason ?? "This request can't be edited." };
+  const amountChanged =
+    Number(current.amount) !== d.amount ||
+    current.currency !== d.currency ||
+    current.usage !== d.usage;
+  if (amountChanged && !rules.canEditAmount)
+    return { ok: false, error: rules.reason ?? "The amount can no longer change." };
+
+  const expires = expiryFrom(d.expires_in_days);
+  const changes = {
+    invoice_number: d.invoice_number || null,
+    memo: d.memo || null,
+    payer_email: d.payer_email || null,
+    ...(expires !== undefined ? { expires_at: expires } : {}),
+    ...(amountChanged ? { amount: d.amount, currency: d.currency, usage: d.usage } : {}),
+  };
+  let q = db()
+    .from("payment_requests")
+    .update(changes)
+    .eq("id", current.id)
+    .eq("business_id", business.id)
+    .eq("status", "active");
+  if (amountChanged) q = q.eq("attempt_count", 0);
+  const { data, error } = await q.select().maybeSingle();
+  if (error) {
+    console.error("[payment_requests] update failed", error.message);
+    return { ok: false, error: "We could not save your changes. Please try again." };
+  }
+  if (!data)
+    return {
+      ok: false,
+      error:
+        "A payer started paying while you were editing, so the amount is now fixed. Reload and try again.",
+    };
+  return { ok: true, request: data };
 }
 
 export async function disablePaymentRequest(reference: string): Promise<ActionResult> {
