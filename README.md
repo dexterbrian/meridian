@@ -119,23 +119,41 @@ Rule: `src/lib` has no I/O and has tests. `src/server` does I/O and stays thin.
 
 ## Auth
 
-People sign in with a 6-digit code sent by email. The same email has a link that works too.
+There are **no passwords**. Everyone signs in the same way: type your email, get a 6-digit code, enter it. The same email also has a link that works if you click it instead.
 
 - `/app/*` sends signed-out visitors to sign-in, then back.
-- `/admin/*` shows a 404 to anyone who is not an admin.
+- `/admin/*` shows a 404 to anyone who is not an admin. Being an admin is a flag on your user, not a separate login.
 
-### Making someone an admin
+### Signing in to the admin dashboard
 
-Admins are marked by hand in Supabase.
+The admin dashboard is at `/admin` (for example `http://localhost:3000/admin` locally, or `https://meridian.appify.co.ke/admin` in production). There is no admin username or password. You sign in with your normal email code, and your user carries an "admin" flag that unlocks `/admin`.
 
-1. Supabase dashboard, then Authentication, then Users.
-2. Open the user. Edit their raw app metadata to `{"role": "admin"}`. Or run this in the SQL editor:
-   ```sql
-   update auth.users
-   set raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'
-   where email = 'brian@appify.co.ke';
-   ```
-3. The user signs out and in again. The new role is in their next session.
+**Step 1 — sign in once, so your user exists.**
+
+1. Go to `/auth/sign-in` and enter your email.
+2. Read the 6-digit code from the email and enter it.
+   - **Locally**, the email does not really send. Open the mail catcher at http://127.0.0.1:54324 and read the code there.
+   - **In production**, the code arrives in your real inbox (needs `RESEND_API_KEY` and a verified sending domain).
+
+At this point you can reach `/app`, but `/admin` still shows a 404. You are a normal user until you are made an admin.
+
+**Step 2 — make that user an admin.** Run this once, with your own email:
+
+```sql
+update auth.users
+set raw_app_meta_data = raw_app_meta_data || '{"role": "admin"}'
+where email = 'brian@appify.co.ke';
+```
+
+- **Locally:** paste it into Supabase Studio's SQL editor at http://127.0.0.1:54323, or run
+  ```sh
+  npx supabase db query --local "update auth.users set raw_app_meta_data = raw_app_meta_data || '{\"role\": \"admin\"}' where email = 'brian@appify.co.ke';"
+  ```
+- **In production:** run the same statement in the hosted project's SQL editor (Supabase dashboard, SQL Editor). Or use the dashboard UI: Authentication, then Users, open your user, edit **Raw app metadata** to `{"role": "admin"}`.
+
+**Step 3 — sign out and sign in again.** The role is read from your session, which is only refreshed on a new sign-in. After signing back in, `/admin` opens: the flag queue, held payments, failed payouts and a view of every Payaza call.
+
+There is no self-service way to become an admin, on purpose. It is set by hand in the database.
 
 ### Hosted Supabase settings
 

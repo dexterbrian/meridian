@@ -319,24 +319,50 @@ One order, told end to end.
 - Whole-unit currencies charge the payer a whole unit; the business still gets the exact amount. (28 Sep, build day)
 - Payaza's public key is used for API calls and Web Checkout; the secret key only signs webhooks. (28 Sep, confirmed against the sandbox)
 
-**Open (ask Payaza)**
-1. Can a payment collected in one currency (GHS, XOF, NGN, USD) be paid out in another (KES, UGX, TZS)? Who converts, and at what rate? Until answered, a payout only runs when the payout account matches the request currency.
-2. Card limits for single B2B payments of USD 35,000 or more.
-3. Does Rwanda (RWF) mobile money collection work?
-4. Is South Sudan (SSP) on the roadmap?
-5. Does split settlement work across currencies?
-6. How often do webhooks retry, and what happens when a reference is reused?
-7. ~~Hackathon dates.~~ ANSWERED: build day 28/09/2026, demo day 29/09/2026. Submit the web app link.
-8. **Test payout float.** Please fund the test merchant's KES and NGN payout balances so the demo can run a real Transfer. Until then the payout is simulated in the sandbox.
-9. **Enable collections** for GHS, UGX and TZS on the test account (KES and NGN work). And enable the Bank Codes API, which returns 403 today.
-10. Confirm the mobile money network codes beyond `SAFKEN` (Airtel Kenya, MTN Ghana, MTN Uganda, Vodacom Tanzania and so on).
+**Questions for Payaza**
+
+The account is `PZ78` in test mode. Written so they can be copied straight into an email to [integrationsupport@payaza.africa](mailto:integrationsupport@payaza.africa).
+
+_Blocks the live demo — please answer first:_
+
+1. **Fund our test payout balance.** Our test merchant has no balance to pay out from, so the Transfers API returns "An error occurred while processing transaction". Please credit our sandbox KES balance (and NGN if easy) so we can run a real payout to an M-Pesa number. What is the test top-up process?
+
+2. **Enable mobile money collections beyond Kenya.** KES collections work on our test key. GHS returns `response_code 96, "Service Unavailable"`. Your docs say non-Nigeria collections are enabled on request. Please enable **GHS (Ghana), UGX (Uganda) and TZS (Tanzania)** mobile money collections for our test account, and the same currencies in live.
+
+3. **Mobile money network (bank) codes.** We have confirmed `SAFKEN` (M-Pesa Kenya), `MTNCMR`, `ORACMR`, `MOMCIV`, `WAVCIV`, `AFRSLE`, `EFTZAR`, `CPZZAR` from your docs and the sandbox. Please confirm the `customer_bank_code` for the other networks we plan to accept: **Airtel Kenya, MTN / Vodafone / AirtelTigo Ghana, MTN / Airtel Uganda, Vodacom (M-Pesa) / Airtel / Tigo / HaloPesa Tanzania.** The full sheet you link is currency-summary only.
+
+4. **Bank Codes API returns 403.** `GET /payaza-account/api/v1/mainaccounts/merchant/banks/{currency}` returns `Authentication failed (403)` with our test public key, though the same key authenticates collections and account enquiry. Does this endpoint need a different scope or activation on our account?
+
+_Affects the product but not the live demo:_
+
+5. **Cross-currency payout.** If a customer pays in GHS, XOF, NGN or USD, can you pay the business out in a different currency (KES, UGX, TZS …) from the balance that payment landed in? If so, who does the conversion and at what rate, and which endpoint carries it? Today we only pay out when the payout account currency matches the payment currency.
+
+6. **Card limits for large B2B payments.** One of our exporters collects USD 35,000–40,000 per shipment by card. What is the per-transaction and daily card limit, and is 3DS required at that size?
+
+7. **Payaza's fee before the charge.** We only see `transaction_fee` on the webhook and status query (it is 0 in the sandbox). Is there any way to get the fee for a method and amount *before* charging, so we can show it to the payer exactly rather than from our own schedule?
+
+8. **Webhook behaviour.** How many times do you retry a webhook, over what period? And what happens if we reuse a `transaction_reference` — is the second call rejected, and with what response?
+
+9. **Account name enquiry in the sandbox.** In test mode the enquiry returns the same name (`Chibunkem Ojiaku`) for any account number, so we cannot really verify a payout account there. Is there a way to get real test names, or does this only work in live?
+
+10. **Collecting on behalf of other businesses.** Meridian is the merchant; the money belongs to the businesses we onboard, and we pay it straight out to them. Is this allowed under your terms, and are there limits? Your sub-accounts are documented as internal only.
+
+_Corridor coverage (for the roadmap, not the demo):_
+
+11. Does **Rwanda (RWF)** mobile money collection work? RWF is in your currency list but not your mobile money list.
+12. Is **South Sudan (SSP)** collection on your roadmap? A customer there can pay us by USD card today, but not by local mobile money.
+13. Does **split settlement** support KES, and does it work across currencies? We are using Transfers instead for now.
+
+_Answered:_
+- Hackathon dates: build 28/09/2026, demo 29/09/2026, submit the web app link.
+- Keys: the public key authenticates the API and is the Web Checkout `merchant_key`; the secret key signs webhooks (base64 HMAC SHA512). Confirmed against the sandbox.
 
 ---
 
 ## 10. Next steps
 
 1. ~~Watch for the shortlist email.~~ Shortlisted.
-2. ~~Open a Payaza sandbox account.~~ Done. Send Payaza open questions 8 to 10 today; they decide how much of the demo is live.
+2. ~~Open a Payaza sandbox account.~~ Done. Send Payaza questions 1 to 4 today; they decide how much of the demo is live.
 3. ~~Add the invoice number field.~~ Done.
 4. ~~Build H-20 to H-29 and H-32 to H-35 against the sandbox.~~ Done on build day; see section 6 for what the sandbox blocks.
 5. Owner review of the local build, then deploy to Vercel at `meridian.appify.co.ke`: set the environment variables, point the Payaza webhook URLs at `/api/webhooks/payaza`, run the migration on the hosted Supabase project, mark Brian as admin.
