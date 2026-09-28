@@ -91,6 +91,8 @@ export type BusinessProfileInput = z.input<typeof businessProfileSchema>;
 
 export const payoutAccountSchema = z
   .object({
+    /** Set when editing an existing account. */
+    id: z.uuid().optional(),
     currency: z.enum(PAYOUT_CURRENCIES as [Currency, ...Currency[]]),
     country: iso2.refine((c) => c in ISO3, "Pick a country"),
     method: z.enum(["bank", "momo"]),

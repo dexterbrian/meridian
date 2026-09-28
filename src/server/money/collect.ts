@@ -223,7 +223,10 @@ async function loadPayoutAccount(id: string | null): Promise<PayoutAccount | nul
   return data ?? null;
 }
 
-/** The account a request pays out to: same currency if there is one, else the business's first default. */
+/**
+ * The account a request pays out to: the default in the request's currency, else
+ * any account in that currency, else the business's first default (converted).
+ */
 export async function pickPayoutAccount(
   businessId: string,
   currency: string,
@@ -235,6 +238,7 @@ export async function pickPayoutAccount(
     .order("created_at", { ascending: true });
   const accounts = data ?? [];
   return (
+    accounts.find((a) => a.currency === currency && a.is_default) ??
     accounts.find((a) => a.currency === currency) ??
     accounts.find((a) => a.is_default) ??
     accounts[0] ??

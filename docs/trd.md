@@ -204,7 +204,7 @@ Index: `id_number` for duplicate check.
 | partner | text | `payaza`, `kotani`, `klasha` |
 | partner_customer_key | text null | Kotani customer record |
 | validated | boolean | Via partner validation endpoint (Payaza: account name enquiry) |
-| is_default | boolean | One default per currency. A business may hold accounts in several currencies (KES, UGX …). Payouts go to the account matching the request currency if there is one, else to the business's main default account, converted. |
+| is_default | boolean | A business may hold several accounts per currency and several currencies. Exactly one default per currency (partial unique index), set with `set_default_payout_account`. Payouts go to the default in the request currency, else any account in it, else the business's first default, converted. Currency is fixed once created. |
 
 **`recipients`** — suppliers a business pays
 | Column | Type | Notes |

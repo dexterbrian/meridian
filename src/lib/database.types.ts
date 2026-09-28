@@ -240,6 +240,28 @@ isOneToOne: false
 "my_business_ids":
 { Args: Record<PropertyKey, never>; Returns: string[]
                            },
+"set_default_payout_account":
+{ Args: { "p_account_id": string,"p_business_id": string }; Returns: {
+              "business_id": string,
+"country": string,
+"created_at": string,
+"currency": string,
+"details": NonNullable<Json>,
+"id": string,
+"is_default": boolean,
+"method": string,
+"partner": string,
+"partner_customer_key": string | null,
+"updated_at": string,
+"validated": boolean,
+"validated_name": string | null
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "payout_accounts"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
 "start_collection_attempt":
 { Args: { "p_amount": number,"p_meridian_fee": number,"p_partner_fee": number,"p_pay_method": string,"p_payer": Json,"p_payout_account_id": string,"p_quote": Json,"p_reference": string,"p_total_charged": number,"p_usd_equivalent": number }; Returns: {
               "attempt_no": number | null,

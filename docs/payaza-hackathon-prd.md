@@ -214,7 +214,7 @@ IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time a
 |---|---|---|---|
 | H-01 | Sign in with email code | Must | Done |
 | H-02 | Business profile: name, country, contact | Must | Done (`/app/onboarding`) |
-| H-03 | Payout account in the business's chosen currency (KES, UGX, TZS, NGN, GHS, ZAR, ZMW, XAF, LRD, CDF), mobile money or bank, name checked with Payaza account name enquiry. One account per currency. | Must | Done. Name match enforced in live mode; the sandbox returns a canned name, so there it is shown as a warning. |
+| H-03 | Payout account in the business's chosen currency (KES, UGX, TZS, NGN, GHS, ZAR, ZMW, XAF, LRD, CDF), mobile money or bank, name checked with Payaza account name enquiry. Several accounts per currency allowed (e.g. M-Pesa and bank, both KES); one is the default and receives that currency's payouts. Accounts can be edited; the currency is fixed once created. | Must | Done. Name match enforced in live mode; the sandbox returns a canned name, so there it is shown as a warning. |
 | H-04 | Create a payment request: amount, currency, **invoice number**, note, single or multi use | Must | Done, plus optional expiry and payer email |
 | H-05 | Share the link by copy, email or WhatsApp | Must | Done |
 | H-06 | Dashboard: requests, status, invoice number, reference, who paid, payout status | Must | Done, with a per-attempt timeline on the request page |
@@ -267,7 +267,7 @@ IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time a
 | H-51 | Unit tests for reference formats: request, attempt (15 characters max), payout | Must | Done |
 | H-52 | Unit tests for the Payaza webhook signature check: valid, tampered, wrong secret | Must | Done |
 | H-53 | Unit tests for idempotency: same webhook twice changes state once; one payout per payment | Must | Done as an end-to-end script against the sandbox (`npm run e2e:sandbox`); the rules live in the database, so a pure unit test would prove little |
-| H-54 | Unit tests for the checks in 5.7 and for currency rules (payout currency supported, one account per currency) | Must | Done for 5.7; the currency rules are schema constraints |
+| H-54 | Unit tests for the checks in 5.7 and for currency rules (payout currency supported, one default account per currency) | Must | Done for 5.7; the currency rules are schema constraints |
 | H-55 | Lint, type check and tests run on every push; a failure blocks the merge | Must | Done (`.github/workflows/ci.yml`); branch protection to be switched on in GitHub |
 
 ### 6.6 Admin

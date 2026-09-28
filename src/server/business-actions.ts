@@ -112,6 +112,8 @@ export async function listPayoutAccounts(): Promise<PayoutAccount[]> {
     .from("payout_accounts")
     .select()
     .eq("business_id", b.id)
+    .order("currency")
+    .order("is_default", { ascending: false })
     .order("created_at");
   return data ?? [];
 }
@@ -138,6 +140,25 @@ export async function savePayoutAccount(
   const d = parsed.data;
   if (!(d.country in ISO3))
     return { ok: false, error: "Payaza does not pay out to that country yet." };
+
+  // Editing: the account must be the caller's, and its currency stays fixed,
+  // because payments already heading to it are in that currency.
+  let existing: PayoutAccount | null = null;
+  if (d.id) {
+    const { data } = await db()
+      .from("payout_accounts")
+      .select()
+      .eq("id", d.id)
+      .eq("business_id", business.id)
+      .maybeSingle();
+    if (!data) return { ok: false, error: "That payout account was not found." };
+    if (data.currency !== d.currency)
+      return {
+        ok: false,
+        error: `This account is in ${data.currency}. To be paid in ${d.currency}, add a new account.`,
+      };
+    existing = data;
+  }
   if (d.method === "momo") {
     const n = findNetwork(d.bank_code);
     if (!n || n.currency !== d.currency)
@@ -170,34 +191,65 @@ export async function savePayoutAccount(
   }
 
   const bankName = d.bank_name || findNetwork(d.bank_code)?.name || d.bank_code;
-  const { data, error } = await db()
-    .from("payout_accounts")
-    .upsert(
-      {
-        business_id: business.id,
-        currency: d.currency,
-        country: d.country,
-        method: d.method,
-        details: {
-          bank_code: d.bank_code,
-          bank_name: bankName,
-          account_number: d.account_number,
-          account_name: d.account_name,
-        },
-        partner: "payaza",
-        validated: matches,
-        validated_name: resolvedName,
-        is_default: true,
-      },
-      { onConflict: "business_id,currency" },
-    )
-    .select()
-    .single();
-  if (error || !data) {
-    console.error("[payout_accounts] upsert failed", error?.message);
-    return { ok: false, error: "We could not save the account. Please try again." };
+  const fields = {
+    country: d.country,
+    method: d.method,
+    details: {
+      bank_code: d.bank_code,
+      bank_name: bankName,
+      account_number: d.account_number,
+      account_name: d.account_name,
+    },
+    partner: "payaza",
+    validated: matches,
+    validated_name: resolvedName,
+  };
+
+  let saved: PayoutAccount | null;
+  if (existing) {
+    const { data, error } = await db()
+      .from("payout_accounts")
+      .update(fields)
+      .eq("id", existing.id)
+      .eq("business_id", business.id)
+      .select()
+      .single();
+    if (error) console.error("[payout_accounts] update failed", error.message);
+    saved = data ?? null;
+  } else {
+    // A business's first account in a currency becomes that currency's default.
+    const { count } = await db()
+      .from("payout_accounts")
+      .select("id", { count: "exact", head: true })
+      .eq("business_id", business.id)
+      .eq("currency", d.currency)
+      .eq("is_default", true);
+    const { data, error } = await db()
+      .from("payout_accounts")
+      .insert({ ...fields, business_id: business.id, currency: d.currency, is_default: !count })
+      .select()
+      .single();
+    if (error) console.error("[payout_accounts] insert failed", error.message);
+    saved = data ?? null;
   }
-  return { ok: true, account: data, check: { resolvedName, matches, enforced } };
+  if (!saved) return { ok: false, error: "We could not save the account. Please try again." };
+  return { ok: true, account: saved, check: { resolvedName, matches, enforced } };
+}
+
+/** Makes one account the default for its currency. Payouts in that currency go there. */
+export async function setDefaultPayoutAccount(id: string): Promise<ActionResult> {
+  if (!/^[0-9a-f-]{36}$/.test(id)) return { ok: false, error: "Unknown account." };
+  if (!allowRequest("business")) return { ok: false, error: RATE_LIMITED };
+  const business = await requireBusiness();
+  const { error } = await db().rpc("set_default_payout_account", {
+    p_business_id: business.id,
+    p_account_id: id,
+  });
+  if (error) {
+    console.error("[payout_accounts] set default failed", error.message);
+    return { ok: false, error: "Could not make that the default account." };
+  }
+  return { ok: true };
 }
 
 /* ----------------------------- payment requests --------------------------- */
