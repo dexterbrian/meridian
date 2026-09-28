@@ -7,8 +7,9 @@
 | Repo | https://github.com/dexterbrian/meridian |
 | Event | Payaza Borderless Kenya Hackathon ([hackathon.payaza.africa](https://hackathon.payaza.africa/)) |
 | Track | 3. SME and exporter collections |
-| Status | Idea submitted 26 September 2026. Awaiting shortlist. Demo flows exist in the repo, simulated. |
-| Document version | 0.1 |
+| Status | Shortlisted. Build day 28 September 2026: the collection flow runs end to end against Payaza's sandbox. Demo day 29 September. |
+| Deployment | Vercel at **https://meridian.appify.co.ke**. Built and tested locally first, with an ngrok tunnel for Payaza's webhooks. |
+| Document version | 0.2 |
 | Date | 28 September 2026 |
 | Related | [Main PRD](./prd.md) · [Customer interviews](./customer-interviews.md) · [Idea deck](./meridian-payaza-collect-deck.pptx) · [Payaza docs](https://docs.payaza.africa/) |
 
@@ -119,7 +120,8 @@ Checked against Payaza's docs on 28 September 2026.
 |---|---|
 | Who pays fees | **The payer.** Fees are added on top so the business gets the full amount. |
 | How the total is worked out | Fees are charged on what the payer pays, not on the invoice. So the payer total = amount ÷ (1 − fee rate). Example: a USD 36,000 request paid by card (2.5% partner + 1% Meridian) costs the payer USD 37,305.70, and the business gets USD 36,000.00. |
-| Meridian fee | Flat 1%. Taken by Payaza split settlement. |
+| Meridian fee | Flat 1% of what the payer pays. It is what stays in Meridian's Payaza balance after the business is paid its full amount by Transfers. (Split settlement is bank-only and NGN-only in Payaza's docs today, so it is not used. See TRD 4.2.) |
+| Whole-unit rails | M-Pesa and most East African wallets move whole units. For KES, UGX, TZS, XOF, XAF and CDF the payer total is rounded up to a whole unit; the extra goes to the partner fee line and the business still gets the exact amount. Example: KES 650,000 by mobile money costs the payer KES 670,104, not 670,103.09. |
 | Partner fee | Payaza's fee for the method. Shown as its own line. |
 | Before a method is picked | Fees show as 0. The payer total shows the amount. Fees appear once a method is chosen. |
 | Exchange rate | Meridian adds nothing. The payer sees Payaza's rate before paying. |
@@ -135,7 +137,7 @@ Businesses already make their own invoices. Meridian does not make invoices for 
 | **Invoice number** | The business, optional, free text | `INV-2048` | Pay page, receipts to both sides, business dashboard, CSV export. Searchable. |
 | **Meridian reference** | Meridian, one per payment request | `MRD-VNN6FG3X` | The link, pay page, receipts, dashboard, support. |
 | **Payaza transaction reference** | Meridian, one per payment attempt | `MRD-VNN6FG3X-1` | Sent to Payaza. Used to match webhooks and status checks. |
-| **Payout reference** | Meridian, one per payout | `MRDP-VNN6FG3X` | Sent to Payaza Transfers. |
+| **Payout reference** | Meridian, one per payout | `MRDP-VNN6FG3X-1` | Sent to Payaza Transfers. Carries the attempt number so a multi-use link's payouts stay unique. |
 
 Payaza asks for a unique reference on every charge, at most 15 characters for cards, and at least 10 for transfers. The formats above fit both.
 
@@ -161,11 +163,12 @@ Payaza's own guidance says the same: "Process transactions based on their unique
 2. The payer opens the link and picks a method. Meridian shows fees and the payer total.
 3. Meridian saves the attempt and its reference, then starts the Payaza charge.
 4. Payaza confirms by webhook. Meridian verifies the signature, checks the reference, records the payment and runs checks (5.7).
-5. Payaza split settlement sends Meridian's 1% to Meridian's account.
-6. Meridian pays the business's saved account, in its payout currency, through Payaza Transfers. The business gets the full requested amount.
-7. Both sides get a receipt with the invoice number and the Meridian reference.
+5. Meridian pays the business's saved account, in its payout currency, through Payaza Transfers. The business gets the full requested amount. Meridian's 1% is what stays behind in the Payaza balance.
+6. Both sides get a receipt with the invoice number and the Meridian reference.
 
 Meridian never holds a balance for the business.
+
+**Sandbox limits found on build day.** Payaza's test merchant has no payout float, so Transfers cannot succeed in the sandbox. With `PAYAZA_SIMULATE_PAYOUTS=true` (sandbox only) the payout is marked settled without calling Payaza and the timeline says "Paying out (simulated)". The account name enquiry returns one canned name for any input in the sandbox, so the name match is shown as a warning there and enforced only in live mode. Both are listed as asks to Payaza in section 9.
 
 ### 5.7 Checks for the build
 
@@ -203,77 +206,77 @@ Paying suppliers abroad (the "Send" flow). Kotani Pay and Klasha. Wallets and ba
 
 ## 6. Functional requirements
 
-IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time allows). Status: **Done** means it works today as a simulation. Every Payaza item is **Not started**.
+IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time allows). Status as of the end of build day, 28 September 2026. **Done** means it works against Payaza's sandbox. **Sandbox-blocked** means the code is written but Payaza's test account cannot run it yet.
 
 ### 6.1 Business
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
 | H-01 | Sign in with email code | Must | Done |
-| H-02 | Business profile: name, country, contact | Must | Not started |
-| H-03 | Payout account in the business's chosen currency (KES, UGX, TZS, NGN, GHS, ZAR, ZMW, XAF, LRD, CDF), mobile money or bank, name checked with Payaza account name enquiry. One account per currency. | Must | Not started |
-| H-04 | Create a payment request: amount, currency, **invoice number**, note, single or multi use | Must | Done as a demo (no invoice number field yet) |
-| H-05 | Share the link by copy, email or WhatsApp | Must | Done as a demo (copy and email) |
-| H-06 | Dashboard: requests, status, invoice number, reference, who paid, payout status | Must | Not started |
-| H-07 | Search the dashboard by invoice number or Meridian reference | Should | Not started |
-| H-08 | CSV export of payments | Should | Not started |
+| H-02 | Business profile: name, country, contact | Must | Done (`/app/onboarding`) |
+| H-03 | Payout account in the business's chosen currency (KES, UGX, TZS, NGN, GHS, ZAR, ZMW, XAF, LRD, CDF), mobile money or bank, name checked with Payaza account name enquiry. One account per currency. | Must | Done. Name match enforced in live mode; the sandbox returns a canned name, so there it is shown as a warning. |
+| H-04 | Create a payment request: amount, currency, **invoice number**, note, single or multi use | Must | Done, plus optional expiry and payer email |
+| H-05 | Share the link by copy, email or WhatsApp | Must | Done |
+| H-06 | Dashboard: requests, status, invoice number, reference, who paid, payout status | Must | Done, with a per-attempt timeline on the request page |
+| H-07 | Search the dashboard by invoice number or Meridian reference | Should | Done |
+| H-08 | CSV export of payments | Should | Done |
 
 ### 6.2 Payer
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
-| H-10 | Pay page shows the business, amount, invoice number, reference and note | Must | Done as a demo (no invoice number yet) |
-| H-11 | Pick a method: mobile money, bank transfer, card. Each shows what it needs. | Must | Done as a demo |
+| H-10 | Pay page shows the business, amount, invoice number, reference and note | Must | Done |
+| H-11 | Pick a method: mobile money, bank transfer, card. Each shows what it needs. | Must | Done. Methods are filtered by the request currency. |
 | H-12 | Fee summary under the amount, with fees at 0 until a method is picked | Must | Done |
 | H-13 | "See breakdown" opens the full breakdown beside the form. On phones it scrolls down to it. | Must | Done |
-| H-14 | The payer pays fees on top. The business gets the exact amount. | Must | Done (fee maths) |
-| H-15 | Show the payer's amount in their own currency before they pay | Must | Not started |
-| H-16 | Receipt email to the payer with invoice number and reference | Must | Done as a demo |
+| H-14 | The payer pays fees on top. The business gets the exact amount. | Must | Done, including whole-unit rounding for M-Pesa (5.3) |
+| H-15 | Show the payer's amount in their own currency before they pay | Must | Partly. The pay page charges in the request currency; a Ghanaian buyer of a KES request needs a GHS request or Payaza's conversion answer (section 9, question 1). |
+| H-16 | Receipt email to the payer with invoice number and reference | Must | Done (needs `RESEND_API_KEY` to deliver) |
 
 ### 6.3 Payaza integration
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
-| H-20 | Payaza sandbox and live keys, server side only, one switch between them | Must | Not started |
-| H-21 | Mobile money collection (KES, UGX, TZS, GHS, SLE, XOF) | Must | Not started |
-| H-22 | NGN virtual account collection | Must | Not started |
-| H-23 | Card collection in USD and NGN, 3DS | Must | Not started |
+| H-20 | Payaza sandbox and live keys, server side only, one switch between them | Must | Done. `MERIDIAN_MODE` picks `X-TenantID`; the secret key never leaves the server. |
+| H-21 | Mobile money collection (KES, UGX, TZS, GHS, SLE, XOF) | Must | Done for KES (M-Pesa, `SAFKEN`), proven in the sandbox. Other currencies are wired but the test account returned "Service Unavailable" for GHS; ask Payaza to enable them. |
+| H-22 | NGN virtual account collection | Must | Done (dynamic account, 30 minutes, amount validation) |
+| H-23 | Card collection in USD and NGN, 3DS | Must | Done through Payaza Web Checkout; not yet exercised with a test card |
 | H-24 | Payaza payment links with the customer bearing fees | Should | Not started |
-| H-25 | Apple Pay and Google Pay | Should | Not started |
-| H-26 | Webhook handler: verify the HMAC SHA512 signature, match the reference, ignore repeats | Must | Not started |
-| H-27 | Status query as a fallback when a webhook is late | Must | Not started |
-| H-28 | Split settlement: Meridian's 1% to Meridian | Must | Not started |
-| H-29 | Payout to the business through Payaza Transfers, in the payout account's currency, after the payment is confirmed | Must | Not started |
+| H-25 | Apple Pay and Google Pay | Should | Comes with Web Checkout; not exercised |
+| H-26 | Webhook handler: verify the HMAC SHA512 signature, match the reference, ignore repeats | Must | Done (`/api/webhooks/payaza`) |
+| H-27 | Status query as a fallback when a webhook is late | Must | Done. The pay page's poll asks Payaza after 15 seconds; the retry job asks after 2 minutes. |
+| H-28 | Split settlement: Meridian's 1% to Meridian | Must once Payaza confirms KES support and fees | Not used. Transfers is the payout path; the 1% stays in the Payaza balance. |
+| H-29 | Payout to the business through Payaza Transfers, in the payout account's currency, after the payment is confirmed | Must | Sandbox-blocked. Code complete; the test merchant has no payout float, so `PAYAZA_SIMULATE_PAYOUTS` stands in and the timeline says so. |
 
 ### 6.4 Idempotency and references
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
 | H-30 | Meridian reference per request (`MRD-` plus 8 characters) | Must | Done |
-| H-31 | Business invoice number stored, shown and searchable | Must | Not started |
-| H-32 | Idempotency key on "Create request". The same key returns the same request. | Must | Not started |
-| H-33 | One Payaza reference per payment attempt, saved before the call. A paid request can't be paid again. | Must | Partly done (the demo won't mark a paid request as paid twice) |
-| H-34 | Webhooks processed once per reference and status | Must | Not started |
-| H-35 | One payout per payment, enforced by the database. Retries check status first. | Must | Not started |
+| H-31 | Business invoice number stored, shown and searchable | Must | Done |
+| H-32 | Idempotency key on "Create request". The same key returns the same request. | Must | Done |
+| H-33 | One Payaza reference per payment attempt, saved before the call. A paid request can't be paid again. | Must | Done (`start_collection_attempt`, proven by `npm run e2e:sandbox`) |
+| H-34 | Webhooks processed once per reference and status | Must | Done (unique key on `transaction_events`) |
+| H-35 | One payout per payment, enforced by the database. Retries check status first. | Must | Done (unique `payout_reference`, claimed with a conditional update) |
 
 ### 6.5 Quality
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
-| H-50 | Unit tests (Vitest) for fee maths: gross-up exact to the cent, zero fees before a method is picked | Must | Done |
-| H-51 | Unit tests for reference formats: request, attempt (15 characters max), payout | Must | Partly done (request format) |
-| H-52 | Unit tests for the Payaza webhook signature check: valid, tampered, wrong secret | Must | Not started |
-| H-53 | Unit tests for idempotency: same webhook twice changes state once; one payout per payment | Must | Not started |
-| H-54 | Unit tests for the checks in 5.7 and for currency rules (payout currency supported, one account per currency) | Must | Not started |
-| H-55 | Lint, type check and tests run on every push; a failure blocks the merge | Must | Not started |
+| H-50 | Unit tests (Vitest) for fee maths: gross-up exact to the cent, zero fees before a method is picked | Must | Done, plus whole-unit currencies |
+| H-51 | Unit tests for reference formats: request, attempt (15 characters max), payout | Must | Done |
+| H-52 | Unit tests for the Payaza webhook signature check: valid, tampered, wrong secret | Must | Done |
+| H-53 | Unit tests for idempotency: same webhook twice changes state once; one payout per payment | Must | Done as an end-to-end script against the sandbox (`npm run e2e:sandbox`); the rules live in the database, so a pure unit test would prove little |
+| H-54 | Unit tests for the checks in 5.7 and for currency rules (payout currency supported, one account per currency) | Must | Done for 5.7; the currency rules are schema constraints |
+| H-55 | Lint, type check and tests run on every push; a failure blocks the merge | Must | Done (`.github/workflows/ci.yml`); branch protection to be switched on in GitHub |
 
 ### 6.6 Admin
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
-| H-40 | List of payments and payouts with status | Must | Not started |
-| H-41 | Flags from 5.7, with release or reject | Must | Not started |
-| H-42 | Failed payout: alert, retry, or mark for a manual refund | Must | Not started |
+| H-40 | List of payments and payouts with status | Must | Done, with a per-transaction page showing events, flags and every Payaza call |
+| H-41 | Flags from 5.7, with release or reject | Must | Done |
+| H-42 | Failed payout: alert, retry, or mark for a manual refund | Must | Done |
 
 ---
 
@@ -294,12 +297,12 @@ IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time a
 One order, told end to end.
 
 1. Ann signs in. She creates a request for KES 650,000 with her invoice number `AF-0917` and sends the link on WhatsApp.
-2. Her buyer in Accra opens it. Fees show 0 until they pick mobile money. Then the fees and the total in cedis appear.
-3. The buyer pays with MTN Mobile Money in Payaza's sandbox.
-4. Payaza's webhook arrives. The timeline moves to "Paid", then "Paying out", then "Settled".
-5. Ann's dashboard shows KES 650,000 received against `AF-0917`. Both sides have receipts.
-6. We send the same webhook again live. Nothing changes. That shows idempotency.
-7. Close with Chris (USD card from Europe) and AfricaHackon (USD card from South Sudan) on one slide.
+2. Her buyer opens it. Fees show 0 until they pick mobile money. Then the fees and the payer total (KES 670,104) appear, with the breakdown.
+3. The buyer pays with M-Pesa in Payaza's sandbox. (Payaza's test account has KES enabled; GHS is pending, see section 9. If Payaza enables Ghana in time, the buyer pays in cedis instead.) The "Simulate approval on the phone" button plays the buyer entering their PIN.
+4. Payaza's webhook arrives. The timeline moves to "Paid", then "Paying out", then "Settled". (Payout simulated unless Payaza funds the test float.)
+5. Ann's dashboard shows KES 650,000 received against `AF-0917`, and the request page shows the attempt's timeline. Both sides have receipts.
+6. We replay the same webhook with curl. The response says `duplicate` and nothing changes. That shows idempotency. Then we click Pay on the same link again: the database refuses because the request is paid.
+7. Close with Chris (USD card from Europe) and AfricaHackon (USD card from South Sudan) on one slide, and the admin page showing a held payment released.
 
 ---
 
@@ -311,21 +314,31 @@ One order, told end to end.
 - Businesses keep their own invoice numbers. Meridian adds its `MRD-` reference. Meridian does not make invoices. (28 Sep)
 - Idempotent at every money step (5.5). (28 Sep)
 
+- Deploy to Vercel at `meridian.appify.co.ke`. Develop locally with an ngrok tunnel for webhooks. (28 Sep)
+- Transfers, not split settlement, pays the business. Meridian's 1% is what remains in the Payaza balance. (28 Sep, build day)
+- Whole-unit currencies charge the payer a whole unit; the business still gets the exact amount. (28 Sep, build day)
+- Payaza's public key is used for API calls and Web Checkout; the secret key only signs webhooks. (28 Sep, confirmed against the sandbox)
+
 **Open (ask Payaza)**
-1. Can a payment collected in one currency (GHS, XOF, NGN, USD) be paid out in another (KES, UGX, TZS)? Who converts, and at what rate?
+1. Can a payment collected in one currency (GHS, XOF, NGN, USD) be paid out in another (KES, UGX, TZS)? Who converts, and at what rate? Until answered, a payout only runs when the payout account matches the request currency.
 2. Card limits for single B2B payments of USD 35,000 or more.
 3. Does Rwanda (RWF) mobile money collection work?
 4. Is South Sudan (SSP) on the roadmap?
 5. Does split settlement work across currencies?
 6. How often do webhooks retry, and what happens when a reference is reused?
-7. Hackathon dates for the build, the demo and what to submit. Not yet published. ANSWERED: build day 28/09/2026, demo day 29/09/2026. Submit the web app link.
+7. ~~Hackathon dates.~~ ANSWERED: build day 28/09/2026, demo day 29/09/2026. Submit the web app link.
+8. **Test payout float.** Please fund the test merchant's KES and NGN payout balances so the demo can run a real Transfer. Until then the payout is simulated in the sandbox.
+9. **Enable collections** for GHS, UGX and TZS on the test account (KES and NGN work). And enable the Bank Codes API, which returns 403 today.
+10. Confirm the mobile money network codes beyond `SAFKEN` (Airtel Kenya, MTN Ghana, MTN Uganda, Vodacom Tanzania and so on).
 
 ---
 
 ## 10. Next steps
 
-1. Watch for the shortlist email. ANSWER: We were shortlisted.
-2. Open a Payaza sandbox account and send them the open questions.
-3. Add the invoice number field to the payment request demo.
-4. Build H-20 to H-29 against the sandbox, then the idempotency items H-32 to H-35.
-5. Ask AfricaHackon how their South Sudanese customers pay today.
+1. ~~Watch for the shortlist email.~~ Shortlisted.
+2. ~~Open a Payaza sandbox account.~~ Done. Send Payaza open questions 8 to 10 today; they decide how much of the demo is live.
+3. ~~Add the invoice number field.~~ Done.
+4. ~~Build H-20 to H-29 and H-32 to H-35 against the sandbox.~~ Done on build day; see section 6 for what the sandbox blocks.
+5. Owner review of the local build, then deploy to Vercel at `meridian.appify.co.ke`: set the environment variables, point the Payaza webhook URLs at `/api/webhooks/payaza`, run the migration on the hosted Supabase project, mark Brian as admin.
+6. Run the demo script (section 8) end to end on the deployed app with `MERIDIAN_MODE=sandbox`.
+7. Ask AfricaHackon how their South Sudanese customers pay today.

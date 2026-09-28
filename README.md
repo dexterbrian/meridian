@@ -10,8 +10,9 @@ A product of Appify Softwares Limited. Product and technical plans live in [docs
 - Tailwind CSS v4, Kobalte, lucide-solid
 - Supabase: Postgres, Auth (email one-time code), Storage
 - Resend for email
+- Payaza for collections and payouts (hackathon build)
 - Zod for validation, Vitest for tests
-- Hosting: Cloudflare Workers (see TRD 1.1)
+- Hosting: Vercel at https://meridian.appify.co.ke (see TRD 1.1)
 
 ## Setup
 
@@ -21,6 +22,7 @@ Needs Node 24 or newer. Docker is needed for local Supabase.
 npm install
 cp .env.example .env.local      # then fill it in (see below)
 npx supabase start              # local Postgres, Auth and a mail catcher
+npx supabase migration up       # apply any new migrations
 npm run dev                     # http://localhost:3000
 ```
 
@@ -34,6 +36,42 @@ Local sign-in emails do not really send. Open the mail catcher at http://127.0.0
 
 Without `RESEND_API_KEY`, app emails fail on purpose. Each failure is logged in the `partner_calls` table, so you can see what would have been sent.
 
+### Payaza
+
+Keys come from the Payaza dashboard: Settings, Developers, Generate Keys. Test keys start `PZ78-PKTEST-` and `PZ78-SKTEST-`.
+
+- `PAYAZA_PUBLIC_KEY` authenticates API calls and is the Web Checkout `merchant_key`.
+- `PAYAZA_SECRET_KEY` signs webhooks. Server only.
+- `PAYAZA_TRANSACTION_PIN` authorises payouts. Set it in the dashboard first (Settings, Profile, Security).
+- `PAYAZA_SIMULATE_PAYOUTS=true` while the test merchant has no payout float. Sandbox only.
+
+### Receiving Payaza webhooks locally (ngrok)
+
+Payaza cannot reach `localhost`, so a tunnel fronts the dev server.
+
+```sh
+ngrok config add-authtoken <your token>     # once; from dashboard.ngrok.com
+ngrok http 3000                             # prints https://<something>.ngrok-free.app
+```
+
+Then:
+
+1. Put the https URL in `.env.local` as `APP_URL`.
+2. In the Payaza dashboard (Settings, Developers, webhooks) set **both** the collection and payout webhook URLs to `https://<something>.ngrok-free.app/api/webhooks/payaza`. Test mode.
+3. Restart `npm run dev`.
+
+Without the tunnel the app still works: the pay page asks Payaza for the payment's status after 15 seconds, and the payout sweep does the same every 10 minutes. The tunnel just makes it instant.
+
+### Trying the flow
+
+1. Sign in at `/auth/sign-in` (read the code from Mailpit at http://127.0.0.1:54324).
+2. `/app/onboarding`: business profile. `/app/settings/payout-accounts`: a KES M-Pesa account (`SAFKEN`, `254712345678`). In the sandbox Payaza returns the same canned name for any account, so the mismatch is a warning.
+3. `/app/collect/new`: KES 650,000, invoice `AF-0917`. Open the link.
+4. On the pay page pick Mobile money, M-Pesa, `254712345678`. Press Pay, then "Simulate approval on the phone". Watch the timeline settle.
+5. `/admin` needs the admin role (below). It shows flags, held payments and every Payaza call.
+
+Or run it all headless: `npm run e2e:sandbox`.
+
 ## Environment
 
 Every variable is listed in [.env.example](.env.example) with a note. The main groups:
@@ -43,6 +81,7 @@ Every variable is listed in [.env.example](.env.example) with a note. The main g
 | Supabase | `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_*` | Everywhere. The service key is server only. |
 | Email | `RESEND_API_KEY`, `EMAIL_FROM`, `ADMIN_EMAIL` | Confirmations, lead alerts, failure alerts |
 | App | `APP_URL`, `MERIDIAN_MODE`, `JOBS_SECRET` | Links in emails, sandbox banner, cron routes |
+| Payaza | `PAYAZA_PUBLIC_KEY`, `PAYAZA_SECRET_KEY`, `PAYAZA_BASE_URL`, `PAYAZA_TRANSACTION_PIN`, `PAYAZA_SIMULATE_PAYOUTS` | Collections, webhooks, payouts |
 | Partners | `KOTANI_*`, `KLASHA_*` | From Phase 3 |
 
 `VITE_*` values end up in the browser. Never put a secret in one.
@@ -53,8 +92,10 @@ Every variable is listed in [.env.example](.env.example) with a note. The main g
 |---|---|
 | `npm run dev` | Dev server on port 3000 |
 | `npm run build` | Production build for Node (`npm start` runs it) |
+| `npm run build:vercel` | Production build for Vercel (what Vercel runs) |
 | `npm run build:workers` | Production build for Cloudflare Workers |
 | `npm test` | Unit tests |
+| `npm run e2e:sandbox` | The whole collection flow against Payaza's sandbox and local Supabase |
 | `npm run lint` | ESLint, including the rule that keeps the service key in `src/server` |
 | `npm run typecheck` | TypeScript |
 | `npm run format` | Prettier |
@@ -63,11 +104,12 @@ Every variable is listed in [.env.example](.env.example) with a note. The main g
 
 ```
 src/
-  routes/        pages and API routes (file-based)
-  components/    site header, footer, banner, fee breakdown, UI pieces
-  lib/           pure logic with tests: fees, references, schemas, auth rules
-  server/        server-only code: Supabase admin client, auth, email, partners
+  routes/        pages and API routes (file-based): /pay, /app, /admin, /api/webhooks, /api/jobs
+  components/    site chrome, fee breakdown, pay flow, status badges and timeline, form fields
+  lib/           pure logic with tests: fees, references, Payaza codes and webhooks, checks, schemas
+  server/        server-only code: Supabase admin client, auth, email, Payaza client, the collection state machine
   middleware.ts  guards /app and /admin on full page loads
+scripts/         e2e-sandbox.ts and smoke-signed-in.ts (run with vite-node)
 supabase/
   migrations/    database changes, applied in order
   templates/     the sign-in email template
@@ -118,11 +160,16 @@ After a schema change, regenerate the types:
 npx supabase gen types typescript --local > src/lib/database.types.ts
 ```
 
-## Deploy (Cloudflare Workers)
+## Deploy (Vercel, meridian.appify.co.ke)
 
-```sh
-npm run build:workers
-npx wrangler deploy --config .output/server/wrangler.json
-```
+`vercel.json` holds the build command and the cron. Import the GitHub repo into Vercel, then:
 
-Set the server variables as Worker secrets (`npx wrangler secret put NAME`). The `VITE_*` values must be present at build time.
+1. Project settings, Environment Variables: everything in `.env.example` except the local Supabase values. `APP_URL=https://meridian.appify.co.ke`. `CRON_SECRET` equal to `JOBS_SECRET`. `MERIDIAN_MODE=sandbox` until the pilot.
+2. Domains: add `meridian.appify.co.ke` and set the CNAME it asks for.
+3. Supabase hosted project: `npx supabase link --project-ref <ref>` then `npx supabase db push`. Auth URL configuration: site URL `https://meridian.appify.co.ke`, redirect URL `https://meridian.appify.co.ke/auth/callback`.
+4. Payaza dashboard: collection and payout webhook URLs `https://meridian.appify.co.ke/api/webhooks/payaza`.
+5. Mark Brian as admin (above).
+
+The cron every 10 minutes needs Vercel Pro. On Hobby, hit `GET /api/jobs/payout-retry` with `Authorization: Bearer <JOBS_SECRET>` from any external scheduler, or use the "Run payout sweep" button in `/admin`.
+
+A Cloudflare Workers build also exists: `npm run build:workers` then `npx wrangler deploy --config .output/server/wrangler.json`.

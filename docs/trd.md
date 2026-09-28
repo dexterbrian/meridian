@@ -2,7 +2,7 @@
 
 | Field | Value |
 |---|---|
-| Version | 0.2 |
+| Version | 0.3 |
 | Date | 28 September 2026 |
 | Scope | MVP as defined in [PRD v0.4](./prd.md), and the hackathon build in the [Payaza hackathon PRD v0.1](./payaza-hackathon-prd.md) |
 | Principle | Smallest system that meets the PRD. One app, one database, one email provider. Partners: Payaza for the hackathon build; Kotani Pay and Klasha for the full MVP. |
@@ -28,6 +28,8 @@ Payaza / Kotani / Klasha ──webhooks──> /api/webhooks/{payaza|kotani|klas
 Scheduler ──────────────────> /api/jobs/{sanctions-refresh|payout-retry|quote-cleanup}
 ```
 
+Locally, Payaza cannot reach `localhost`, so an **ngrok** tunnel fronts the dev server and its https URL is the webhook URL in the Payaza dashboard (see README). In production the app runs on **Vercel** at `https://meridian.appify.co.ke`.
+
 No queue, no cache, no separate backend. Server functions call partners directly. Webhooks write to Postgres. Scheduled jobs are HTTP routes hit by a cron.
 
 ### 1.1 Stack
@@ -45,19 +47,23 @@ No queue, no cache, no separate backend. Server functions call partners directly
 | Email | Resend Node SDK | Direct. Templates are plain functions returning HTML strings. Verified sending domain required. |
 | Tests | Vitest | Unit tests for pure logic. No e2e in MVP. |
 | Lint / format | ESLint + Prettier | Carry over existing config. |
-| Hosting | **Cloudflare Workers** via the Nitro `cloudflare_module` preset (`npm run build:workers`). Decided in Phase 0. Railway (Node) stays the fallback; `npm run build` makes a Node server. | Cheapest with built-in cron triggers. Caveat resolved below. |
+| Hosting | **Vercel** via the Nitro `vercel` preset (`npm run build:vercel`), production domain `meridian.appify.co.ke`. Decided 28 September 2026 for the hackathon build. Cloudflare Workers (`npm run build:workers`) and a plain Node server (`npm run build`) remain as build targets. | Owner decision. One-command deploys from the GitHub repo, preview URLs per branch, cron built in. |
 
-**Hosting caveat.** Klasha requires request bodies encrypted with AES-256-CBC using OpenSSL's `EVP_BytesToKey` derivation (MD5-based). Workers have WebCrypto for AES-CBC but no MD5. Use a small pure-JS MD5 (e.g. `js-md5`) for key derivation. If this proves awkward in Phase 4, move to Railway.
+**Hosting history.** Phase 0 chose Cloudflare Workers and proved Klasha's AES-256-CBC encryption runs there (`src/server/partners/klasha-crypto.ts`, `js-md5` for `EVP_BytesToKey`, verified against the OpenSSL CLI in workerd and in Vitest). That work stands; the Workers build still exists. Vercel was chosen for the hackathon because the owner already runs Appify sites there and the domain is ready. Vercel runs Node, so the MD5 caveat does not apply.
 
-**Decision (Phase 0 spike, 23 September 2026): Cloudflare Workers.** `src/server/partners/klasha-crypto.ts` does AES-256-CBC with WebCrypto and derives key and IV with `js-md5`. It was run inside the local Workers runtime (workerd via `wrangler dev`): it matched the OpenSSL CLI byte for byte with a fixed salt, decrypted a payload OpenSSL made, and round-tripped with a random salt. The same checks run in Vitest on every push. Klasha encryption is no longer a reason to leave Workers.
+**Vercel notes.**
+- `vercel.json` sets the build command and the cron for `/api/jobs/payout-retry` every 10 minutes. Vercel Cron sends `Authorization: Bearer CRON_SECRET`, so `CRON_SECRET` is set to the same value as `JOBS_SECRET`. Cron schedules under one hour need the Pro plan; on Hobby the same route can be hit by any external cron with the bearer.
+- Server functions run as one serverless function. The in-memory rate limiter (section 9) is per instance, which is enough for the MVP.
+- `VITE_*` variables must be present at build time; everything else is a runtime environment variable in the Vercel project.
+- Set the Payaza webhook URL to `https://meridian.appify.co.ke/api/webhooks/payaza` for both collections and payouts, and `APP_URL` to `https://meridian.appify.co.ke`.
 
 ### 1.2 Environments
 
 | Env | Partners | Supabase | Domain |
 |---|---|---|---|
-| local | Payaza sandbox, Kotani sandbox, Klasha dev | Local or a dev project | localhost |
-| staging | Payaza sandbox, Kotani sandbox, Klasha dev | Dev project | staging.meridian.* |
-| production | Payaza production, Kotani production, Klasha production | Prod project | meridian.* |
+| local | Payaza sandbox, Kotani sandbox, Klasha dev | Local (`npx supabase start`) | localhost, with an ngrok https tunnel for webhooks |
+| preview | Payaza sandbox | Dev project | Vercel preview URL per branch |
+| production | Payaza production (sandbox until the pilot), Kotani production, Klasha production | Prod project | `meridian.appify.co.ke` on Vercel |
 
 `MERIDIAN_MODE=sandbox|live` switches partner base URLs (for Payaza, the `X-TenantID` header) and shows a banner in the UI.
 
@@ -84,12 +90,13 @@ SUPABASE_PUBLISHABLE_KEY          # browser-safe
 SUPABASE_SERVICE_ROLE_KEY         # server only
 
 # Partners (server only unless marked)
-PAYAZA_API_KEY                    # raw key; sent as "Authorization: Payaza base64(key)"
-PAYAZA_MERCHANT_KEY               # browser-safe key for Web Checkout (confirm it differs from PAYAZA_API_KEY)
-PAYAZA_WEBHOOK_SECRET             # HMAC SHA512 secret for x-payaza-signature
-PAYAZA_BASE_URL                   # https://api.payaza.africa/live/ (same for test; X-TenantID picks the mode)
-PAYAZA_TRANSACTION_PIN            # 6-digit PIN required by Transfers
-PAYAZA_ACCOUNT_REFERENCE          # from View Payaza Account Details, required by Transfers
+PAYAZA_PUBLIC_KEY                 # authenticates every API call ("Authorization: Payaza base64(key)") and is the Web Checkout merchant_key, so it may reach the browser
+PAYAZA_SECRET_KEY                 # signs webhooks (x-payaza-signature, HMAC SHA512, base64). Server only.
+PAYAZA_BASE_URL                   # https://api.payaza.africa/live (same for test; X-TenantID picks the mode)
+PAYAZA_TRANSACTION_PIN            # 6-digit PIN required by Transfers. Never logged (redact.ts strips *pin*).
+PAYAZA_SIMULATE_PAYOUTS           # sandbox only: true marks payouts settled without calling Transfers (the test merchant has no float)
+# The Payaza account reference per currency is fetched at runtime from
+# /payaza-account/api/v1/mainaccounts/merchant/enquiry/main, not configured.
 KOTANI_API_KEY
 KOTANI_WEBHOOK_SECRET
 KOTANI_BASE_URL                   # sandbox-api.kotanipay.io | api.kotanipay.io
@@ -106,9 +113,9 @@ EMAIL_FROM                        # e.g. Meridian <hello@meridian.appify.co.ke>
 ADMIN_EMAIL                       # alerts and lead notifications
 
 # App
-APP_URL
+APP_URL                           # locally the ngrok https URL; production https://meridian.appify.co.ke
 MERIDIAN_MODE                     # sandbox | live
-JOBS_SECRET                       # bearer for /api/jobs/*
+JOBS_SECRET                       # bearer for /api/jobs/*; on Vercel CRON_SECRET holds the same value
 ```
 
 ---
@@ -257,13 +264,16 @@ Unique: `(business_id, idempotency_key)`. Index: `(business_id, invoice_number)`
 | usd_equivalent | numeric | For limits and AML. Computed at quote time. |
 | partner_in | text null | `payaza`, `kotani`, `klasha` |
 | partner_in_ref | text null | |
+| partner_fee_reported | numeric null | The fee the partner reported on the collection (webhook or status query). Compared with `partner_fee_in`; a gap over 1 cent is flagged `H_FEE_MISMATCH`. |
 | partner_out | text null | |
 | payout_reference | text null | Unique. Our payout reference, set once, **before** the payout call (2.5). |
 | partner_out_ref | text null | |
-| quote | jsonb | Raw partner quote |
+| quote | jsonb | Raw partner quote, plus `lastStatusCheck` and `payoutSimulated` bookkeeping |
 | quote_expires_at | timestamptz null | |
-| payer_name / payer_email / payer_country | text null | For collections |
+| payin_details | jsonb null | What the payer needs to finish: virtual account number and expiry, mobile money instructions and OTP token, or the Web Checkout config |
+| payer_name / payer_email / payer_phone / payer_country | text null | For collections |
 | pay_method | text | `momo`, `bank`, `card` |
+| collected_at | timestamptz null | |
 | settled_at | timestamptz null | |
 | failure_reason | text null | |
 
@@ -328,6 +338,10 @@ Retention: 7 years. Nothing in this schema is ever hard-deleted. Rows get `statu
 
 Doing this in one database transaction means two clicks can't both start a charge under the same number, and a paid single-use request can't be charged again.
 
+**`mark_request_paid`** — Postgres function, called when a collection settles. Adds 1 to `paid_count` and sets `status = 'paid'` for a single-use request in one update, so two settlements can't both see `paid_count = 0`.
+
+**Status order for a collection.** `awaiting_payin → collected → paying_out → settled`. `held` sits after `collected`: the money is in, the payout waits for an admin. `blocked` happens before any partner call. `failed` can happen at either leg; `failure_reason` says which. `refunded` is set by an admin after a manual refund.
+
 ### 2.3 RLS summary
 
 | Table | Business owner | Admin | Anon |
@@ -364,6 +378,8 @@ Limits: PDF, JPG, PNG. 10 MB per file.
 The hackathon PRD's example `MRDP-VNN6FG3X` becomes `MRDP-VNN6FG3X-1`, so a multi-use link's many payouts stay unique.
 
 **Fees on top.** The payer covers every fee. `src/lib/fees.ts` grosses the amount up: `total_charged = round2(send_amount / (1 − partner rate − 0.01))`. Meridian's fee is 1% of `total_charged`. The partner fee takes the rounding remainder, so `total_charged − fees = send_amount` to the cent. Until the payer picks a method, the quote has zero fees and `total_charged = send_amount`.
+
+**Whole-unit rails.** M-Pesa and most East African wallets move whole units. Payaza's sandbox rounded a KES 670,103.09 charge up to 670,104 and the amount check then held the payout. So each currency carries `chargeDecimals` (KES, UGX, TZS, XOF, XAF, CDF are 0), and for those the payer total is rounded **up** to a whole unit before the fee split. The extra goes to the partner fee line; the business still gets exactly `send_amount`.
 
 ---
 
@@ -432,6 +448,37 @@ src/
 
 Rule: anything in `src/lib` has no I/O and has tests. Anything in `src/server` is I/O and is thin.
 
+**As built for the hackathon (28 September 2026).** The tree above is the target. What exists now:
+
+```
+src/
+  routes/
+    pay/[reference].tsx            real pay page; falls back to the demo for demo_transactions references
+    app.tsx  app/index.tsx         layout with nav; payments dashboard, search, CSV export
+    app/onboarding.tsx             business profile
+    app/collect/new.tsx            new payment request; copy, WhatsApp, email sharing
+    app/collect/[reference].tsx    request detail with a timeline per attempt
+    app/settings/payout-accounts.tsx
+    admin.tsx  admin/index.tsx     flags and transactions with release, reject, retry, refund
+    admin/transactions/[id].tsx    events, flags and every Payaza call for one transaction
+    api/webhooks/payaza.ts
+    api/jobs/payout-retry.ts
+  server/
+    partners/payaza.ts             typed client, every call logged to partner_calls
+    money/collect.ts               the collection state machine (6.2, 6.4)
+    pay-actions.ts  business-actions.ts  admin-actions.ts
+    email/templates.ts             receipts, request link, held, failed, flag alert
+  lib/
+    fees.ts  reference.ts  payaza-codes.ts  payaza-webhook.ts  checks.ts  csv.ts  status.ts  schemas.ts
+  components/
+    pay-flow.tsx                   method choice, payer fields, momo wait, virtual account, Web Checkout launcher
+    status.tsx                     badges and the four-step timeline
+    ui/field.tsx                   labelled inputs, buttons, notices
+scripts/
+  e2e-sandbox.ts                   full flow against Payaza's sandbox (npm run e2e:sandbox)
+  smoke-signed-in.ts               renders every signed-in page against a running dev server
+```
+
 ---
 
 ## 4. Partner integration
@@ -466,18 +513,21 @@ Rule: anything in `src/lib` has no I/O and has tests. Anything in `src/server` i
 
 ### 4.2 Payaza (hackathon build)
 
-- **Auth.** `Authorization: Payaza {base64(PAYAZA_API_KEY)}`. `X-TenantID: test | live` from `MERIDIAN_MODE`. `X-ProductID: app` on mobile money, XOF and ZAR calls. One base URL for both modes.
+- **Keys.** Payaza issues a public and a secret key per mode. The **public** key authenticates every API call (`Authorization: Payaza {base64(PAYAZA_PUBLIC_KEY)}`) and is the raw `merchant_key` for Web Checkout, so it is safe in the browser. The **secret** key only signs webhooks. Confirmed against the sandbox on 28 September. `X-TenantID: test | live` from `MERIDIAN_MODE`. `X-ProductID: app` on mobile money, XOF and ZAR calls. One base URL for both modes. Virtual account and merchant-reference status endpoints reject `X-TenantID`, so the client omits it there.
 - **Collections.**
   - Mobile money, XOF, ZAR: server calls Process Collection with the attempt reference, amount = `total_charged`, currency, payer phone, country and network code. The payer approves on their phone. XOF adds an OTP step on our page.
   - NGN bank transfer: server creates a dynamic virtual account (30 minutes) and our page shows the account number, like the demo.
   - Card, Apple Pay, Google Pay: our page opens Payaza Web Checkout (`PayazaCheckout.setup`) with `PAYAZA_MERCHANT_KEY`, the attempt reference and `total_charged`. **Card numbers are typed into Payaza's form, never ours.** The card fields in today's demo are a simulation only.
   - The Web Checkout's client callback is only a hint. It can be faked. The server confirms by webhook or status query before anything moves.
 - **Payment links.** Payaza's own payment links (with the customer bearing fees) are a fallback for payers who want Payaza's page. Our `/pay/{reference}` stays the main page because it shows Meridian's fees, invoice number and reference.
-- **Webhooks.** `POST /api/webhooks/payaza`. Verify `x-payaza-signature` = HMAC SHA512 of the raw body with `PAYAZA_WEBHOOK_SECRET`, timing-safe compare. Reject unknown references. Then confirm with the matching status query before changing state, as Payaza advises.
-- **Status queries.** Card and checkout by merchant reference; mobile money; virtual accounts; transfers. Used after every webhook, by the payout retry job, and when a webhook is late.
-- **Payout.** Account name enquiry when the business saves its Kenyan account. On a confirmed collection, call Transfers in the payout account's currency (mobile money or bank) with `payout_reference`, `PAYAZA_TRANSACTION_PIN` and `PAYAZA_ACCOUNT_REFERENCE`, for exactly `send_amount`.
+- **Webhooks.** `POST /api/webhooks/payaza`. Verify `x-payaza-signature` = **base64** HMAC SHA512 of the raw body with `PAYAZA_SECRET_KEY`, timing-safe compare. Unknown references get a 404. Then confirm with the matching status query before changing state, as Payaza advises. If the status query has no answer yet, the signed webhook is trusted; if it says failed, the payment is failed. Collections carry our reference in `merchant_reference`; transfers carry it in `transaction_reference` with a `NIP_*` status.
+- **Status queries.** Card and checkout by merchant reference; mobile money by reference **and the wallet's country** (the network's country, not the payer's; a wrong country returns `96 INVALID COUNTRY CODE`, which is our error, not a failed payment); virtual accounts by reference; transfers by payout reference. Used after every webhook, by the payout retry job, and by the pay page's poll once an attempt is 15 seconds old (H-27).
+- **Redirect URL.** Payaza's edge returns 403 for a non-https `redirect_url`. It is only sent for XOF (Wave) and ZAR, and only when the app runs on https. Locally the payer keeps the tab open.
+- **Payout.** Account name enquiry when the business saves its account (in the sandbox Payaza returns one canned name for any input, so the match is recorded but not enforced there; live enforces it). On a confirmed collection, claim `payout_reference`, fetch the Payaza account reference for the currency, and call Transfers with the rail from `payoutRail()` (`mobile_money`, `kepss`, `nuban` …), `PAYAZA_TRANSACTION_PIN` and exactly `send_amount`. **The sandbox merchant has no payout float**, so Transfers fails there; `PAYAZA_SIMULATE_PAYOUTS=true` (sandbox only) marks the payout settled and the timeline says "simulated". Ask Payaza for a test float to run the real call.
+- **Sandbox helpers.** Test Account Funding plays the payer approving a mobile money prompt; Fund Test Virtual Account plays a bank transfer into a virtual account. The pay page shows a "Simulate approval" button in sandbox mode that calls them.
+- **Currencies enabled.** KES mobile money (`SAFKEN`) and NGN virtual accounts work on the test account. GHS returned `96 Service Unavailable`; non-Nigeria collections are enabled per currency on request to Payaza support.
 - **Where the money sits.** Meridian is the Payaza merchant. A payment lands in Meridian's Payaza balance and leaves in the payout, usually within minutes. Meridian's 1% is what stays behind. No Meridian ledger or stored balance for the business, the same model as the Kotani wallet.
-- **Split settlement.** Payaza's split sends a set share of each charge to a beneficiary **bank account** on Payaza's settlement schedule. The owner keeps `split_value` (percent or flat) of the gross; the beneficiary gets the rest. Its docs only show NGN, and don't say who bears Payaza's fee. So it can't carry M-Pesa payouts or the same-day promise today. **Proposed:** Transfers is the payout path. Split settlement pays a business's bank account directly only where Payaza confirms KES support and fees. This changes hackathon PRD H-28 from Must to "Must once Payaza confirms". Owner to decide.
+- **Split settlement.** Payaza's split sends a set share of each charge to a beneficiary **bank account** on Payaza's settlement schedule. The owner keeps `split_value` (percent or flat) of the gross; the beneficiary gets the rest. Its docs only show NGN, and don't say who bears Payaza's fee. So it can't carry M-Pesa payouts or the same-day promise today. **Built:** Transfers is the payout path; Meridian's 1% is what stays in the Payaza balance after the payout. Split settlement is not used. Hackathon PRD H-28 is "once Payaza confirms KES support and fees".
 - **Fees.** No fee quote endpoint is documented. `fees.ts` holds Payaza's rate per method and currency, set from Payaza's pricing. After each webhook, compare Payaza's reported fee with ours; a gap over 1 cent is flagged for review.
 
 ### 4.3 Kotani Pay
@@ -579,11 +629,13 @@ Nightly. Download OFAC SDN (CSV), UN consolidated (XML), EU (XML), UK HMT (CSV).
    - mobile money / XOF / ZAR: Process Collection. Page waits for the result.
    - NGN transfer: create a dynamic virtual account. Page shows it with a countdown.
    - card / wallets: page opens Payaza Web Checkout with the attempt reference.
-4. Payaza webhook → verify signature → insert into `transaction_events` (repeat = stop) → status query → `collected`. Record Payaza's fee and compare with ours.
-5. If not `held`: set `payout_reference` if empty, then Transfers pays the business's default payout account. Same currency as the request: `send_amount`. Different currency: `send_amount` converted (open question 7). Status `paying_out`.
-6. Transfer confirmed (webhook + status query) → `settled`. Receipts to both sides. `paid_count++`; single use → `paid`.
-7. A second attempt that succeeds on an already-paid single-use request is marked `collected`, not paid out, and flagged high for a refund.
-8. Any failure → `failed`, flag admin, email business.
+4. Payaza webhook → verify signature → insert into `transaction_events` (repeat = stop) → status query → `collected`. Record Payaza's fee and compare with ours. The pay page's poll runs the same path from a status query when the webhook is late; both use the key `payaza:collection:{ref}:success`, so whichever comes second is a no-op.
+5. Run the collected checks (hackathon PRD 5.7): amount received vs charged, currency, request still open, fee gap. Any hold → `held`, admin and business emailed. Otherwise claim `payout_reference` (`where payout_reference is null`), then Transfers pays the business's payout account for exactly `send_amount`. Status `paying_out`. A payout account in a different currency from the request fails the payout for now (open question 7).
+6. Transfer confirmed (webhook + status query) → `settled`. `mark_request_paid` bumps `paid_count` and closes a single-use request. Receipts to both sides with the invoice number and both references.
+7. A second attempt that succeeds on an already-paid single-use request is marked `collected` then `held` with `H_REQUEST_NOT_OPEN`, not paid out. The admin rejects (refund due) or releases.
+8. Any failure → `failed` with `failure_reason`, flag `H_PAYOUT_FAILED` for a payout, email business and admin. Admin can retry the payout (status query first, same reference) or mark it refunded.
+
+Proven end to end against the sandbox by `npm run e2e:sandbox`: two clicks make two attempts, the paid event replayed is a duplicate, a late payment on a paid request is held, a third attempt is refused by the database.
 
 ### 6.3 Transfer
 
@@ -653,7 +705,7 @@ All send through one `sendEmail({to, subject, html})` in `server/email/send.ts`.
 - All `/app/*` routes check session in a route-level `preload`/middleware. All `/admin/*` check role claim.
 - Server functions re-check ownership with a query, never trust client-sent `business_id`.
 - Webhook routes: verify signature (Payaza HMAC SHA512, Kotani HMAC SHA256) or confirm via status API (Klasha). Payaza webhooks are also confirmed by status query. Reject unknown references.
-- Card data never touches Meridian. Card entry happens inside Payaza Web Checkout. Only `PAYAZA_MERCHANT_KEY` reaches the browser.
+- Card data never touches Meridian. Card entry happens inside Payaza Web Checkout. Only `PAYAZA_PUBLIC_KEY` reaches the browser, as Payaza's `merchant_key`; `PAYAZA_SECRET_KEY` never does.
 - `PAYAZA_TRANSACTION_PIN` authorises payouts. Server only, never logged.
 - `/api/jobs/*`: `Authorization: Bearer {JOBS_SECRET}`.
 - Rate limit public inserts (waitlist, contact, pay page submit) by IP: 10 per 10 minutes, in-memory per isolate is enough for MVP.
@@ -671,9 +723,10 @@ Must-have tests:
 - `meridianFee` rounding.
 - Gross-up: `total_charged − fees = send_amount` to the cent for many amounts and every method; zero fees before a method is picked.
 - Reference generator: request, attempt (base 36, ≤ 15 characters) and payout formats.
-- Payaza signature verify: valid, tampered, wrong secret.
-- Webhook idempotency: the same event twice changes state once.
-- Payout guard: two concurrent payout calls for one transaction make one partner call.
+- Payaza signature verify: valid, tampered, wrong secret. _Done._
+- Webhook idempotency: the same event twice changes state once. _Done in `npm run e2e:sandbox` against the sandbox; a pure unit test would need a database double._
+- Payout guard: two concurrent payout calls for one transaction make one partner call. _Enforced by the conditional update on `payout_reference`; exercised by the e2e script._
+- Hackathon checks (5.7) and whole-unit gross-up. _Done._
 - `limits`: each tier boundary, rolling window edge.
 - `rules`: one test per rule, positive and negative.
 - `screening`: exact, alias, near-miss, non-match.
@@ -691,7 +744,7 @@ Manual test plan per phase in [phases.md](./phases.md).
 | Task | How | Frequency |
 |---|---|---|
 | Sanctions refresh | `/api/jobs/sanctions-refresh` via cron | Nightly 02:00 EAT |
-| Payout retry | `/api/jobs/payout-retry`: transactions `collected` or `paying_out` for > 10 min. Status query first, then retry with the same `payout_reference` only if the partner has no record. | Every 10 min |
+| Payout retry | `/api/jobs/payout-retry` (Vercel cron in `vercel.json`, or the "Run payout sweep" button in admin): `collected` for > 2 min without a payout reference → start; with one → status query, resume only if Payaza has no record; `paying_out` > 10 min → status query, settle or fail; `awaiting_payin` > 2 min → status query. | Every 10 min |
 | Quote cleanup | Expire `quoted` transactions past `quote_expires_at` | Hourly |
 | FATF list update | Edit `lists.ts`, deploy | Quarterly, after FATF plenary |
 | Klasha wallet funding | Manual, Klasha dashboard | As balance dips |
@@ -719,16 +772,19 @@ Manual test plan per phase in [phases.md](./phases.md).
 2. Kotani bank payout for KES: is `cross-boarder/invoice` the right endpoint, or is a KES `withdraw/bank` available on request?
 3. Kotani fee arrangement per wallet (customer pays vs Meridian pays). Affects whether `total_charged` includes the deposit fee or the partner nets it.
 4. Klasha webhook authenticity: any signature header not in the docs? Otherwise status-API confirmation stands.
-5. ~~Cloudflare Workers vs Node host.~~ Settled in Phase 0: Workers. See 1.1.
+5. ~~Cloudflare Workers vs Node host.~~ Phase 0 chose Workers; 28 September moved production to Vercel at `meridian.appify.co.ke`. See 1.1.
 6. Supabase plan: Free has no PITR and pauses after inactivity. Pro (USD 25/month) before any live money.
 
 **Payaza (hackathon build)**
 
-7. **Currency conversion.** A payment collected in GHS, XOF, NGN or USD lands in that currency's balance. Can Payaza convert it and pay out in the business's currency (KES, UGX, TZS …)? If not, each payout currency needs a float that Meridian tops up, and the demo can only show same-currency payouts. Biggest risk to the demo.
-8. Does Payaza issue a separate browser-safe key for Web Checkout, or is it the same key used on the server?
-9. Split settlement: KES support, who bears Payaza's fee, and settlement timing (see 4.2).
-10. Is Payaza's fee returned before a charge, or only after? Current plan uses a fee schedule and reconciles.
+7. **Currency conversion.** A payment collected in GHS, XOF, NGN or USD lands in that currency's balance. Can Payaza convert it and pay out in the business's currency (KES, UGX, TZS …)? If not, each payout currency needs a float that Meridian tops up. **The build pays out only when the payout account matches the request currency**; otherwise the payout fails with a clear reason and the admin retries once the answer is known.
+8. ~~Does Payaza issue a separate browser-safe key for Web Checkout?~~ **Answered.** The public key is used for both the API `Authorization` header and Web Checkout. The secret key only signs webhooks. See 4.2.
+9. Split settlement: KES support, who bears Payaza's fee, and settlement timing (see 4.2). Not used in the build.
+10. Is Payaza's fee returned before a charge, or only after? **Only after**: `transaction_fee` on the webhook and status query. The sandbox reports 0. The build uses the schedule and flags gaps (`H_FEE_MISMATCH`).
 11. Can a Payaza merchant collect on behalf of other businesses (Meridian's model), and under what terms? Sub-accounts are documented as internal only.
 12. Webhook retry policy, and what Payaza does when a transaction reference is reused.
 13. Is the 15-character card reference limit hard or a recommendation?
-14. Transfers to M-Pesa: exact bank code and field names for Kenyan mobile money and `kepss` bank payouts.
+14. Transfers to M-Pesa: `transaction_type: mobile_money`, `country: KEN`, `bank_code: SAFKEN` is the build's assumption. Not yet run: the sandbox has no payout float.
+15. **Test payout float.** Ask Payaza to fund the test merchant's KES (and NGN) payout balance so the demo can run a real Transfer instead of `PAYAZA_SIMULATE_PAYOUTS`.
+16. **Mobile money network codes.** Only `SAFKEN`, `MTNCMR`, `ORACMR`, `MOMCIV`, `WAVCIV`, `AFRSLE`, `EFTZAR`, `CPZZAR` are confirmed. The rest in `payaza-codes.ts` follow the pattern and are marked unconfirmed in the UI. The Bank Codes API returned 403 on the test account; ask for it to be enabled.
+17. **GHS collections** returned `96 Service Unavailable` on the test account. Ask Payaza to enable Ghana (and Uganda, Tanzania) collections for the demo.

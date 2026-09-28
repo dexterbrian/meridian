@@ -367,10 +367,10 @@ All are addressed by the rewrite rather than patched in TanStack.
 2. Confirm with Klasha: merchant onboarding for a Kenyan entity, CNY B2B document requirements in practice, and wire fees per corridor.
 3. Confirm the tier limits in 5.4 or adjust.
 4. Confirm "no stored balance" for MVP.
-5. Hosting: Cloudflare Workers (cheap, cron built in) or a Node host (Railway, Fly). TRD recommends.
+5. ~~Hosting.~~ Decided 28 September 2026: Vercel, production at `meridian.appify.co.ke`. The Cloudflare Workers build from Phase 0 stays as an option. See TRD 1.1.
 6. Sending domain for Resend.
 7. Legal review of Terms, Privacy and AML policy before live.
-8. Payaza as a collections partner. It is being used for the hackathon build (see [Payaza hackathon PRD](./payaza-hackathon-prd.md)). Decide after the hackathon whether it joins or replaces Kotani Pay for collections.
+8. Payaza as a collections partner. The hackathon build (see [Payaza hackathon PRD](./payaza-hackathon-prd.md)) runs collections and payouts on Payaza end to end against its sandbox. Decide after the hackathon whether it joins or replaces Kotani Pay for collections.
 
 ---
 

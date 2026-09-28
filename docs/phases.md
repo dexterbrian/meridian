@@ -2,13 +2,63 @@
 
 | Field | Value |
 |---|---|
-| Version | 0.1 |
-| Date | 22 September 2026 |
-| Source | [PRD v0.3](./prd.md) · [TRD v0.1](./trd.md) |
+| Version | 0.2 |
+| Date | 28 September 2026 |
+| Source | [PRD v0.4](./prd.md) · [TRD v0.3](./trd.md) · [Payaza hackathon PRD v0.2](./payaza-hackathon-prd.md) |
 
 Six phases. Each has a goal, tasks, and an exit test. Nothing in a later phase starts until the exit test passes. Estimates assume one developer working with AI assistance. Every phase ends in a commit series and a push.
 
 Compliance (Phase 2) comes before any real money (Phases 3 and 4) on purpose.
+
+**Phase H (28 September 2026) sits between Phase 0 and Phase 1.** It is the Payaza hackathon build: collections only, on Payaza, with light checks. It borrows tables from Phases 1 to 3 and builds the collection flow early. Nothing in it is thrown away; Phases 1 to 3 add around it.
+
+---
+
+## Phase H — Payaza hackathon build
+
+**Goal.** A business signs in, adds a payout account, creates a payment request with its own invoice number, and is paid by a customer through Payaza. Idempotent at every money step. Deployed to Vercel at `meridian.appify.co.ke`.
+
+**Done in one day.** Exit tested against Payaza's sandbox with `npm run e2e:sandbox`.
+
+### Tasks
+
+**H.1 Schema**
+- [x] Migration: `businesses` (profile fields), `payout_accounts`, new `payment_requests`, `transactions`, `transaction_events`, `aml_flags`, `partner_calls.transaction_id`. RLS. `start_collection_attempt` and `mark_request_paid` functions.
+- [x] Regenerate `database.types.ts`.
+
+**H.2 Pure rules (`src/lib`)**
+- [x] Attempt and payout references. Whole-unit gross-up per currency. Payaza network codes and rails. Webhook signature and parsing. Hackathon checks. CSV. Status labels. Zod schemas. Tests: 75 passing.
+
+**H.3 Payaza client and state machine (`src/server`)**
+- [x] `partners/payaza.ts`: collections (momo, XOF OTP, ZAR), virtual accounts, status queries, name enquiry, main accounts, Transfers, transfer status, sandbox funding helpers. Every call logged.
+- [x] `money/collect.ts`: start attempt, collected, checks, hold, payout claim, settle, fail, reconcile, retry sweep, admin actions, sandbox approval.
+- [x] `/api/webhooks/payaza` with base64 HMAC SHA512 verification. `/api/jobs/payout-retry` with bearer.
+- [x] Email templates: payer and business receipts, request link, held, failed, flag alert.
+
+**H.4 Business area, pay page, admin**
+- [x] `/app`: dashboard with search and CSV. `/app/onboarding`. `/app/settings/payout-accounts` with name enquiry. `/app/collect/new` with copy, WhatsApp, email. `/app/collect/[reference]` with per-attempt timeline.
+- [x] `/pay/[reference]`: real flow (momo wait and OTP, NGN virtual account, Payaza Web Checkout), demo fallback, attempt resume, sandbox approve button.
+- [x] `/admin`: flags, transactions, release, reject, retry payout, mark refunded, payout sweep. `/admin/transactions/[id]`.
+
+**H.5 Hosting and CI**
+- [x] Vercel build (`npm run build:vercel`), `vercel.json` cron, `.env.example`, `.gitattributes` for LF.
+- [x] CI: lint, typecheck, test on push.
+- [ ] Deploy to Vercel at `meridian.appify.co.ke`: env vars, Payaza webhook URLs, migration on the hosted project, admin role. _Owner, after review._
+- [ ] ngrok authtoken on this machine, tunnel running, webhook URL set in the Payaza dashboard for local testing. _Owner._
+
+**H.6 Asks to Payaza** (hackathon PRD section 9, questions 8 to 10)
+- [ ] Test payout float in KES and NGN.
+- [ ] Enable GHS, UGX, TZS collections and the Bank Codes API on the test account.
+- [ ] Confirm network codes beyond `SAFKEN`.
+
+### Exit test
+- [x] KES 650,000 request with invoice `AF-0917`; payer charged KES 670,104 by M-Pesa; sandbox approval; `awaiting_payin → collected → paying_out → settled`; request `paid`.
+- [x] Second click makes attempt 2, not a duplicate of attempt 1.
+- [x] Replayed webhook returns `duplicate`; nothing changes.
+- [x] Late success on a paid single-use request is `held`, not paid out.
+- [x] Third attempt on a paid request refused by the database.
+- [x] Signed-in pages and admin render (`scripts/smoke-signed-in.ts`); webhook route rejects tampered and unsigned bodies.
+- [ ] Real Transfer to M-Pesa in the sandbox. _Blocked on Payaza's test float._
 
 ---
 
@@ -29,8 +79,8 @@ Compliance (Phase 2) comes before any real money (Phases 3 and 4) on purpose.
 
 **0.2 Hosting spike**
 - [x] 2-hour spike: implement Klasha AES-CBC encryption in Workers runtime with `js-md5`. Round-trip a known payload. _Passed in local workerd and in Vitest._
-- [x] Decide Cloudflare Workers vs Railway. Record decision in TRD. _Workers. TRD 1.1._
-- [ ] Deploy hello-world to staging. Set up custom domain. _Open: needs a Cloudflare login and the domain. The Workers build is ready (`npm run build:workers`)._
+- [x] Decide Cloudflare Workers vs Railway. Record decision in TRD. _Workers at the time. Superseded 28 September: production is Vercel at `meridian.appify.co.ke` (TRD 1.1). The Workers build still exists._
+- [ ] Deploy to the production host. Set up custom domain. _Moves to Phase H.5: Vercel, after the owner's review._
 
 **0.3 Supabase**
 - [ ] Create dev project (or reuse). Upgrade prod project to Pro before Phase 3. _Open: the old Lovable project did not resolve from here. Local Supabase (`npx supabase start`) is set up and used for dev._
