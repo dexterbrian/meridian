@@ -149,6 +149,7 @@ export default function CheckoutDemo() {
                     note={method() ? undefined : "Pick a payment method to see the fees."}
                     open={showBreakdown()}
                     onToggle={() => setShowBreakdown((o) => !o)}
+                    breakdownId="fee-breakdown"
                   />
                 </div>
 
@@ -175,6 +176,7 @@ export default function CheckoutDemo() {
               <div class="space-y-4">
                 <Show when={showBreakdown()}>
                   <FeeBreakdown
+                    id="fee-breakdown"
                     quote={quote()}
                     currencyCode={currencyCode()}
                     netLabel="Merchant receives"

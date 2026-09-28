@@ -133,6 +133,7 @@ export default function PayRequest() {
                       note={method() ? undefined : "Pick a payment method to see the fees."}
                       open={showBreakdown()}
                       onToggle={() => setShowBreakdown((o) => !o)}
+                      breakdownId="fee-breakdown"
                     />
 
                     <input
@@ -171,6 +172,7 @@ export default function PayRequest() {
                   <div class="space-y-4">
                     <Show when={showBreakdown()}>
                       <FeeBreakdown
+                        id="fee-breakdown"
                         quote={quote(data().amount)}
                         currencyCode={data().currency}
                         netLabel={`${data().fromBusiness} receives`}

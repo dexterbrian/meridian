@@ -44,7 +44,23 @@ export function FeeSummary(props: {
   note?: string;
   open: boolean;
   onToggle: () => void;
+  /** Id of the breakdown element. On one-column (mobile) layouts, opening scrolls to it. */
+  breakdownId?: string;
 }) {
+  function toggle() {
+    const opening = !props.open;
+    props.onToggle();
+    const id = props.breakdownId;
+    // Below the lg breakpoint the breakdown sits under the form, out of view.
+    if (!opening || !id || !window.matchMedia("(max-width: 1023px)").matches) return;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    requestAnimationFrame(() =>
+      document
+        .getElementById(id)
+        ?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }),
+    );
+  }
+
   return (
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 rounded-xl border border-border bg-surface/60 px-4 py-3 text-sm">
       <p class="text-muted-foreground">
@@ -60,7 +76,7 @@ export function FeeSummary(props: {
       <button
         type="button"
         aria-expanded={props.open}
-        onClick={() => props.onToggle()}
+        onClick={toggle}
         class="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
       >
         {props.open ? "Hide breakdown" : "See breakdown"}
@@ -94,10 +110,11 @@ export function FeeBreakdown(props: {
   payLabel?: string;
   /** Shown above the fee lines, e.g. when the fees are for a default method. */
   note?: string;
+  id?: string;
 }) {
   const receive = () => props.receiveCurrency ?? props.currencyCode;
   return (
-    <div class="rounded-xl border border-border bg-surface/60 p-4">
+    <div id={props.id} class="scroll-mt-20 rounded-xl border border-border bg-surface/60 p-4">
       <p class="mb-1 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
         Transparent cost breakdown
       </p>
