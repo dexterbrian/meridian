@@ -20,6 +20,12 @@ describe("redact", () => {
     });
   });
 
+  it("hides the Payaza transaction PIN", () => {
+    expect(redact({ service_payload: { transaction_pin: 123456, currency: "KES" } })).toEqual({
+      service_payload: { transaction_pin: "[redacted]", currency: "KES" },
+    });
+  });
+
   it("passes plain values through", () => {
     expect(redact("x")).toBe("x");
     expect(redact(null)).toBe(null);

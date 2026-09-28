@@ -1,7 +1,7 @@
 // Strips secrets and sensitive numbers from anything we store about a partner call.
-// Rule from TRD section 9: keys named *key*, *secret*, *token*, account_number, id_number.
+// Rule from TRD section 9: keys named *key*, *secret*, *token*, *pin*, account_number, id_number.
 
-const SENSITIVE = /key|secret|token|password|authorization|^account_number$|^id_number$/i;
+const SENSITIVE = /key|secret|token|password|authorization|pin|^account_number$|^id_number$|^bvn$/i;
 
 export function redact(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(redact);

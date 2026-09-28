@@ -49,6 +49,25 @@ describe("demo quotes", () => {
     }
   });
 
+  it("collection: whole-unit currencies charge a whole number and still net to the amount", () => {
+    // M-Pesa moves whole shillings. 650,000 / 0.97 = 670,103.09 rounds up to 670,104;
+    // the 91 cents go to the partner fee line, so the business still gets exactly 650,000.
+    const q = quoteCollection(650000, "momo", "KES");
+    expect(q.payerPays).toBe(670104);
+    expect(Number.isInteger(q.payerPays)).toBe(true);
+    expect(round2(q.payerPays - q.totalFee)).toBe(650000);
+    expect(q.meridianFee).toBe(6701.04);
+    for (const amount of [1, 7, 999, 12345, 650000]) {
+      for (const code of ["KES", "UGX", "TZS", "XOF", "CDF"] as const) {
+        const w = quoteCollection(amount, "momo", code);
+        expect(Number.isInteger(w.payerPays)).toBe(true);
+        expect(round2(w.payerPays - w.totalFee)).toBe(amount);
+      }
+    }
+    // Two-decimal currencies keep cents.
+    expect(quoteCollection(650000, "momo", "GHS").payerPays).toBe(670103.09);
+  });
+
   it("collection: no fees until a method is picked", () => {
     const q = quoteCollection(36000, null);
     expect(q.totalFee).toBe(0);
