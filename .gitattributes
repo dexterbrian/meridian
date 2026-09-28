@@ -1,0 +1,7 @@
+# Prettier expects LF. Force it on checkout too, whatever core.autocrlf says,
+# so lint gives the same answer on Windows as in CI.
+* text=auto eol=lf
+*.png binary
+*.ico binary
+*.jpg binary
+*.pptx binary
