@@ -164,40 +164,45 @@ function BankDetails(props: { total: string }) {
   );
 }
 
+// The demo fills in a well-known test card and locks the fields, so nobody types
+// or autofills a real card. The live build hands card entry to Payaza's checkout.
+const DEMO_CARD = { number: "4242 4242 4242 4242", expiry: "12/34", cvv: "123" };
+const DEMO_CARD_CLASS = `${INPUT_CLASS} cursor-not-allowed bg-secondary/60 font-mono tracking-wider`;
+
 function CardFields() {
   return (
     <div class="space-y-3">
+      <div class="flex items-center gap-2">
+        <span class="rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-widest text-primary">
+          Demo card
+        </span>
+        <span class="text-xs text-muted-foreground">Filled in for you. Not a real card.</span>
+      </div>
       <input
-        required
-        inputmode="numeric"
-        autocomplete="cc-number"
-        aria-label="Card number"
-        placeholder="Card number"
-        maxlength={23}
-        class={INPUT_CLASS}
+        readOnly
+        autocomplete="off"
+        aria-label="Card number (demo card)"
+        value={DEMO_CARD.number}
+        class={DEMO_CARD_CLASS}
       />
       <div class="grid grid-cols-2 gap-3">
         <input
-          required
-          inputmode="numeric"
-          autocomplete="cc-exp"
-          aria-label="Expiry date"
-          placeholder="MM/YY"
-          maxlength={5}
-          class={INPUT_CLASS}
+          readOnly
+          autocomplete="off"
+          aria-label="Expiry date (demo card)"
+          value={DEMO_CARD.expiry}
+          class={DEMO_CARD_CLASS}
         />
         <input
-          required
-          inputmode="numeric"
-          autocomplete="cc-csc"
-          aria-label="CVV"
-          placeholder="CVV"
-          maxlength={4}
-          class={INPUT_CLASS}
+          readOnly
+          autocomplete="off"
+          aria-label="CVV (demo card)"
+          value={DEMO_CARD.cvv}
+          class={DEMO_CARD_CLASS}
         />
       </div>
       <p class="text-xs text-muted-foreground">
-        We accept Visa and Mastercard. Demo only: card details never leave this page.
+        We accept Visa and Mastercard. This demo can't take a real card, so please don't try.
       </p>
     </div>
   );
