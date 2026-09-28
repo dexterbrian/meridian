@@ -6,9 +6,9 @@
 | Owner | Appify Softwares Limited, Nairobi, Kenya ([appify.co.ke](https://appify.co.ke)) |
 | Repo | https://github.com/dexterbrian/meridian |
 | Status | Pre-launch. Marketing site + waitlist + three simulated demos are live. MVP scope defined here. |
-| Document version | 0.3 (MVP scope, partners, KYB tiers, AML, checkout) |
-| Date | 22 September 2026 |
-| Related | [Customer interviews](./customer-interviews.md) · [TRD](./trd.md) · [Phases](./phases.md) |
+| Document version | 0.4 (payer pays fees, invoice numbers, idempotency) |
+| Date | 28 September 2026 |
+| Related | [Customer interviews](./customer-interviews.md) · [TRD](./trd.md) · [Phases](./phases.md) · [Payaza hackathon PRD](./payaza-hackathon-prd.md) |
 
 ---
 
@@ -121,10 +121,11 @@ Hard-coded partner fees (bank 1%, momo 2%, card 2.5%), Meridian 1%, and a 0.35% 
 
 | Item | Rule |
 |---|---|
-| Meridian fee | Flat 1% of the send or collect amount. |
+| Who pays fees | The payer, on top. Fees are charged on what the payer pays, so the total is grossed up: payer total = amount ÷ (1 − fee rate). The business collecting, or the supplier being paid, gets the exact amount. Example: USD 36,000 by card (2.5% + 1%) costs the payer USD 37,305.70. |
+| Meridian fee | Flat 1% of what the payer pays. |
 | Partner fee | Whatever the partner quotes. Shown as its own line. Two legs on cross-border (collect leg, payout leg). |
 | FX | Meridian adds nothing. The partner's quote already includes their rate. |
-| What the user sees at confirm | Amount, partner fee(s), Meridian fee, total cost, and **what the recipient gets** in their currency. Quote expiry shown. |
+| What the user sees at confirm | Amount, partner fee(s), Meridian fee, total cost, **what the payer pays** and **what the recipient gets** in their currency. Quote expiry shown. On a pay page, fees read 0 until the payer picks a method. |
 | What marketing copy says | Never a rate, never a spread percentage. Only: "Exchange rate from our licensed partner, shown before you confirm." |
 
 The current site's "mid-market + 0.35%" copy is removed in this release.
@@ -188,11 +189,11 @@ Rules run in code on every relevant event. Each hit writes a flag. Some rules bl
 The MVP has **no wallet and no stored balance**. Every transaction is funded and settled end to end. This keeps Meridian clear of e-money rules, removes a ledger to reconcile, and matches how interviewees think ("I pay for this order").
 
 **Collect** (payment link or embedded checkout)
-1. Business creates a link: amount (or payer-enters-amount), currency, memo, single or multi use.
+1. Business creates a link: amount (or payer-enters-amount), currency, its own invoice number (optional), memo, single or multi use. Meridian gives it a reference like `MRD-VNN6FG3X`.
 2. Payer opens the hosted page, picks a method, pays. Partner collects.
 3. Partner webhook says paid. Meridian records it and runs AML.
-4. Meridian instructs partner to pay the business's registered payout account, less partner fees and Meridian 1%.
-5. Both sides get a receipt email.
+4. Meridian instructs partner to pay the business's registered payout account the full requested amount. The payer already covered the fees.
+5. Both sides get a receipt email showing the invoice number and the Meridian reference.
 
 **Send** (pay a supplier)
 1. Business picks a saved recipient, enters amount, sees the partner quote (fees, what the recipient gets, expiry).
@@ -205,7 +206,9 @@ Meridian's 1% accumulates in the partner wallet. Partner settles to Appify's ban
 
 ### 5.7 Embeddable checkout and payment links
 
-One primitive: a **payment request**. It has an optional fixed amount, a currency, a memo, and single or multi use. It gets a short reference and a hosted page at `/pay/{reference}`.
+One primitive: a **payment request**. It has an optional fixed amount, a currency, an optional invoice number, a memo, and single or multi use. It gets a short reference and a hosted page at `/pay/{reference}`.
+
+**References.** Businesses make their own invoices. Meridian stores the business's invoice number as given (free text, not unique, since one invoice can be paid in parts) and shows it on the pay page, receipts, dashboard and exports. Meridian adds its own unique reference, `MRD-` plus 8 characters, to every request. Each attempt to pay gets its own partner reference built from it (`MRD-VNN6FG3X-1`), so retries and webhooks can be matched exactly.
 
 | Surface | What it is |
 |---|---|
@@ -217,7 +220,7 @@ No plugin, no SDK, no per-framework packages. One script, one hosted page.
 
 ### 5.8 Out of scope for MVP
 
-Wallets and balances. Team members and roles (one owner per business). Bulk payouts. Recurring payments. Invoicing. Mobile app. API for third parties. Multiple currencies per business payout account (one payout account per currency, added on demand). OCR of documents. Paid KYB providers.
+Wallets and balances. Team members and roles (one owner per business). Bulk payouts. Recurring payments. Generating invoices (businesses keep their own; Meridian stores their invoice number). Mobile app. API for third parties. Multiple currencies per business payout account (one payout account per currency, added on demand). OCR of documents. Paid KYB providers.
 
 ---
 
@@ -268,7 +271,7 @@ IDs use the `M-` prefix. Status: **Done**, **Not started**. Priority: **Must** (
 
 | ID | Requirement | Priority | Status |
 |---|---|---|---|
-| M-40 | Create payment request: amount or open, currency, memo, single/multi use, expiry | Must | Not started |
+| M-40 | Create payment request: amount or open, currency, business invoice number (optional), memo, single/multi use, expiry | Must | Not started |
 | M-41 | Hosted pay page: method choice, partner fee + Meridian fee shown, pay | Must | Not started |
 | M-42 | Kotani deposit integration: mobile money STK, bank checkout, card | Must | Not started |
 | M-43 | Webhook handler with signature verification, idempotent | Must | Not started |
@@ -277,6 +280,7 @@ IDs use the `M-` prefix. Status: **Done**, **Not started**. Priority: **Must** (
 | M-46 | Receipts by email to payer and business | Must | Not started |
 | M-47 | Business dashboard: list of requests, status, who paid | Must | Not started |
 | M-48 | EUR card / bank collection via Kotani | Must (once confirmed) | Not started |
+| M-49 | Invoice number and Meridian reference on pay page, receipts, dashboard and CSV; dashboard searchable by either | Must | Not started |
 
 ### 6.5 Send
 
@@ -302,6 +306,7 @@ IDs use the `M-` prefix. Status: **Done**, **Not started**. Priority: **Must** (
 | M-63 | Scheduled jobs: sanctions refresh, stale quote cleanup, payout retry | Must | Not started |
 | M-64 | Structured server logging, error alerts to email | Must | Not started |
 | M-65 | Sandbox mode toggle: whole app runs against partner sandboxes | Must | Not started |
+| M-66 | Idempotency on every money step (7.1): create request, pay attempt, send, webhook, payout | Must | Not started |
 
 ---
 
@@ -311,11 +316,22 @@ IDs use the `M-` prefix. Status: **Done**, **Not started**. Priority: **Must** (
 |---|---|
 | Security | No service-role key in the browser. RLS on every table. A business reads only its own rows. Admin role via Supabase JWT claim. Partner secrets server-side only. Webhook signatures verified. |
 | Compliance | Tiered KYB before money moves. AML rules on every transaction. 7-year retention of KYB documents, flags, transactions, webhook payloads. |
-| Reliability | Webhooks idempotent (same event twice → one state change). Every partner call logged with request and response. |
+| Reliability | Idempotent throughout (7.1). Every partner call logged with request and response. |
 | Cost | One SolidStart app, one Supabase project, one Resend account. No queues, no extra services. Target under USD 50 / month before volume. |
 | Performance | Landing under 2s on 3G. Quote under 3s (partner-bound). |
 | Observability | Every partner error and every email failure logged and alerted. No swallowed errors. |
 | History | No force-push on `main` while Lovable is connected. Disconnect Lovable after the SolidStart rewrite lands. |
+
+### 7.1 Idempotency
+
+Doing the same thing twice must have the same effect as doing it once. Nobody is charged twice. Nobody is paid twice. This holds when a button is double-clicked, a request is retried, or a partner sends the same webhook again.
+
+| Where a repeat can happen | Rule |
+|---|---|
+| Create a payment request or a transfer | The client sends an idempotency key. The same key returns the first result. |
+| Payer pays, or business pays in | A paid request or funded transfer can't be paid again. Each attempt's partner reference is saved before the partner call. A retry reuses it. |
+| Partner webhook | Matched on partner reference and status. A repeat is logged and ignored. One event, one change of state. |
+| Payout | One payout per collection or transfer, enforced by a unique constraint. A timed-out payout is checked by status query before any retry, with the same reference. |
 
 ---
 
@@ -354,6 +370,7 @@ All are addressed by the rewrite rather than patched in TanStack.
 5. Hosting: Cloudflare Workers (cheap, cron built in) or a Node host (Railway, Fly). TRD recommends.
 6. Sending domain for Resend.
 7. Legal review of Terms, Privacy and AML policy before live.
+8. Payaza as a collections partner. It is being used for the hackathon build (see [Payaza hackathon PRD](./payaza-hackathon-prd.md)). Decide after the hackathon whether it joins or replaces Kotani Pay for collections.
 
 ---
 
