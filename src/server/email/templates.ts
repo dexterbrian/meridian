@@ -143,3 +143,170 @@ export function emailFailureAlert(p: { to: string; subject: string; error: strin
 export function demoEmail(p: Omit<Layout, "demo">): Email {
   return render({ ...p, demo: true });
 }
+
+/* ------------------------------- collections ------------------------------ */
+// Receipts and notices for the Payaza collection flow. Every one shows the
+// business's invoice number (when given) and the Meridian reference.
+
+export type CollectionFacts = {
+  businessName: string;
+  reference: string;
+  attemptReference: string;
+  invoiceNumber: string | null;
+  memo: string | null;
+  amount: string;
+  totalCharged: string;
+  totalFees: string;
+  method: string;
+  payerName: string | null;
+  payerEmail: string | null;
+  settledAt: string;
+  payoutAccount: string;
+  /** Sandbox runs say so on the receipt. */
+  sandbox: boolean;
+};
+
+function refRows(f: CollectionFacts): Row[] {
+  return [
+    ...(f.invoiceNumber ? [{ label: "Invoice number", value: f.invoiceNumber }] : []),
+    { label: "Meridian reference", value: f.reference },
+    { label: "Payment reference", value: f.attemptReference },
+  ];
+}
+
+const sandboxNote = (on: boolean) =>
+  on ? "Sandbox payment through Payaza's test environment. No real money moved." : undefined;
+
+export function payerReceipt(f: CollectionFacts): Email {
+  const inv = f.invoiceNumber ? ` · ${f.invoiceNumber}` : "";
+  return render({
+    subject: `Receipt ${f.reference}${inv} — ${f.businessName}`,
+    heading: "Payment received",
+    intro: `${f.businessName} has received your payment of ${f.amount}. Thank you.`,
+    rows: [
+      ...refRows(f),
+      { label: "Paid to", value: f.businessName },
+      ...(f.memo ? [{ label: "For", value: f.memo }] : []),
+      { label: "Amount", value: f.amount },
+      { label: "Method", value: f.method },
+      { label: "Fees", value: f.totalFees },
+      { label: "You paid", value: f.totalCharged },
+      { label: "Date", value: f.settledAt },
+    ],
+    footnote:
+      sandboxNote(f.sandbox) ??
+      "Keep this email as your receipt. Payments are processed by Payaza.",
+  });
+}
+
+export function businessReceipt(f: CollectionFacts): Email {
+  const inv = f.invoiceNumber ? ` for ${f.invoiceNumber}` : "";
+  return render({
+    subject: `You've been paid ${f.amount}${inv} (${f.reference})`,
+    heading: "Payment settled",
+    intro: `${f.payerName ?? "Your customer"} paid ${f.amount}. The full amount is on its way to ${f.payoutAccount}. The payer covered the fees.`,
+    rows: [
+      ...refRows(f),
+      { label: "Paid by", value: f.payerName ?? "—" },
+      ...(f.payerEmail ? [{ label: "Payer email", value: f.payerEmail }] : []),
+      ...(f.memo ? [{ label: "For", value: f.memo }] : []),
+      { label: "You receive", value: f.amount },
+      { label: "Payer paid", value: f.totalCharged },
+      { label: "Method", value: f.method },
+      { label: "Paid out to", value: f.payoutAccount },
+      { label: "Date", value: f.settledAt },
+    ],
+    footnote: sandboxNote(f.sandbox),
+  });
+}
+
+export function paymentRequestEmail(p: {
+  businessName: string;
+  reference: string;
+  invoiceNumber: string | null;
+  memo: string | null;
+  amount: string;
+  url: string;
+}): Email {
+  const inv = p.invoiceNumber ? ` · ${p.invoiceNumber}` : "";
+  return render({
+    subject: `${p.businessName} requests ${p.amount}${inv}`,
+    heading: `${p.businessName} sent you a payment request`,
+    intro: `Open the link to pay by mobile money, bank transfer or card. Every fee is shown before you pay.\n${p.url}`,
+    rows: [
+      ...(p.invoiceNumber ? [{ label: "Invoice number", value: p.invoiceNumber }] : []),
+      { label: "Meridian reference", value: p.reference },
+      { label: "Amount", value: p.amount },
+      ...(p.memo ? [{ label: "For", value: p.memo }] : []),
+      { label: "Payment link", value: p.url },
+    ],
+  });
+}
+
+export function transactionHeldEmail(p: {
+  businessName: string;
+  reference: string;
+  amount: string;
+  reasons: string[];
+  forAdmin: boolean;
+}): Email {
+  return render({
+    subject: `${p.forAdmin ? "Review needed" : "Payment under review"}: ${p.reference}`,
+    heading: p.forAdmin ? "A payment is on hold" : "Your payment is under review",
+    intro: p.forAdmin
+      ? `${p.amount} was collected for ${p.businessName} but the payout is on hold. Release or reject it in the admin.`
+      : `${p.amount} was received against ${p.reference}. Before we pay it out we need to check something. We will email you within one business day.`,
+    rows: [
+      { label: "Meridian reference", value: p.reference },
+      { label: "Amount", value: p.amount },
+      { label: "Reason", value: p.reasons.join("; ") || "Under review" },
+    ],
+  });
+}
+
+export function transactionFailedEmail(p: {
+  businessName: string;
+  reference: string;
+  amount: string;
+  stage: "payment" | "payout";
+  reason: string;
+  forAdmin: boolean;
+}): Email {
+  const payout = p.stage === "payout";
+  const intro = payout
+    ? p.forAdmin
+      ? `Payaza could not pay ${p.amount} to ${p.businessName}. The money is in Meridian's Payaza balance. Retry the payout or arrange a refund in the admin.`
+      : `We received ${p.amount} for ${p.reference} but could not pay it to your account yet. We are on it and will email you when it is done.`
+    : `The payment for ${p.reference} did not complete. No money moved.`;
+  return render({
+    subject: `${payout ? "Payout failed" : "Payment failed"}: ${p.reference}`,
+    heading: payout ? "A payout did not go through" : "A payment did not go through",
+    intro,
+    rows: [
+      { label: "Meridian reference", value: p.reference },
+      { label: "Amount", value: p.amount },
+      { label: "Reason", value: p.reason },
+    ],
+  });
+}
+
+export function flagAlertEmail(p: {
+  rule: string;
+  severity: string;
+  businessName: string;
+  reference: string | null;
+  message: string;
+}): Email {
+  const on = p.reference ? ` on ${p.reference}` : "";
+  return render({
+    subject: `Flag (${p.severity}): ${p.rule}${on}`,
+    heading: "A check raised a flag",
+    intro: p.message,
+    rows: [
+      { label: "Rule", value: p.rule },
+      { label: "Severity", value: p.severity },
+      { label: "Business", value: p.businessName },
+      ...(p.reference ? [{ label: "Reference", value: p.reference }] : []),
+    ],
+  });
+}

@@ -22,8 +22,14 @@ import {
 } from "~/lib/schemas";
 import { sendEmail, sendToAdmin } from "./email/send";
 import { contactConfirmation, demoEmail, leadAlert, waitlistConfirmation } from "./email/templates";
+import { env } from "./env";
 import { RATE_LIMITED, allowRequest, requestOrigin } from "./request";
 import { supabaseAdmin } from "./supabase";
+
+/** Whether the app runs against partner sandboxes. Drives the banner. */
+export async function getSandboxMode(): Promise<boolean> {
+  return env.mode === "sandbox";
+}
 
 // Server functions behind the public pages. Every one validates its input,
 // is rate limited per IP, and writes with the service role.

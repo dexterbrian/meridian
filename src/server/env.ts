@@ -39,4 +39,32 @@ export const env = {
   get mode(): "sandbox" | "live" {
     return read("MERIDIAN_MODE") === "live" ? "live" : "sandbox";
   },
+  get jobsSecret() {
+    return read("JOBS_SECRET");
+  },
+
+  // Payaza. The public key authenticates API calls (base64, "Payaza" prefix) and
+  // is the merchant_key for Web Checkout. The secret key only signs webhooks and
+  // never leaves the server.
+  get payazaPublicKey() {
+    return requireEnv("PAYAZA_PUBLIC_KEY");
+  },
+  get payazaSecretKey() {
+    return requireEnv("PAYAZA_SECRET_KEY");
+  },
+  get payazaBaseUrl() {
+    return (read("PAYAZA_BASE_URL") ?? "https://api.payaza.africa/live").replace(/\/+$/, "");
+  },
+  /** 6-digit PIN that authorises Transfers. Server only, never logged. */
+  get payazaTransactionPin() {
+    return read("PAYAZA_TRANSACTION_PIN");
+  },
+  /**
+   * Sandbox only. Payaza's test merchant has no payout float, so Transfers cannot
+   * succeed there. With this on, a payout is marked settled without calling Payaza
+   * and the timeline says so. Ignored in live mode.
+   */
+  get payazaSimulatePayouts() {
+    return this.mode === "sandbox" && read("PAYAZA_SIMULATE_PAYOUTS") === "true";
+  },
 };

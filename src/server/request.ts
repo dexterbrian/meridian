@@ -32,6 +32,8 @@ const limiters = {
   contact: createRateLimiter(10, TEN_MINUTES),
   demo: createRateLimiter(10, TEN_MINUTES),
   signIn: createRateLimiter(10, TEN_MINUTES),
+  pay: createRateLimiter(20, TEN_MINUTES),
+  business: createRateLimiter(60, TEN_MINUTES),
 };
 
 export function allowRequest(bucket: keyof typeof limiters): boolean {
