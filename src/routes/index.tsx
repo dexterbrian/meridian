@@ -10,7 +10,7 @@ import ShieldCheck from "lucide-solid/icons/shield-check";
 import Sparkles from "lucide-solid/icons/sparkles";
 import TrendingDown from "lucide-solid/icons/trending-down";
 import Wallet from "lucide-solid/icons/wallet";
-import { For, Show, createSignal } from "solid-js";
+import { For, Show, createSignal, onCleanup, onMount } from "solid-js";
 import { Dynamic } from "solid-js/web";
 
 import { FeeBreakdown } from "~/components/fee-breakdown";
@@ -63,6 +63,66 @@ export default function Landing() {
 
 /* ---------------------------------- hero --------------------------------- */
 
+// The hero alternates between Meridian's two jobs. Each line stays up long enough
+// to read twice. Both lines sit in the same grid cell, so the heading keeps the
+// height of the longer one and the page never jumps.
+//
+// A change scrolls up: the current line slides up and out while the next one
+// slides up from below. The line that just left then drops back below, unseen,
+// ready for its next turn.
+const HERO_LINES = ["Your supplier gets paid today.", "Get paid by your clients today."];
+const HERO_LINE_MS = 4000;
+const HERO_SLIDE_MS = 600;
+
+function HeroHeading() {
+  const [line, setLine] = createSignal(0);
+  const [leaving, setLeaving] = createSignal<number | null>(null);
+
+  onMount(() => {
+    let reset: ReturnType<typeof setTimeout> | undefined;
+    const timer = setInterval(() => {
+      setLeaving(line());
+      setLine((i) => (i + 1) % HERO_LINES.length);
+      reset = setTimeout(() => setLeaving(null), HERO_SLIDE_MS);
+    }, HERO_LINE_MS);
+    onCleanup(() => {
+      clearInterval(timer);
+      clearTimeout(reset);
+    });
+  });
+
+  // Where each line sits: on show, just gone above, or waiting below.
+  const position = (i: number) =>
+    i === line()
+      ? "translate-y-0 opacity-100"
+      : i === leaving()
+        ? "-translate-y-full opacity-0"
+        : "translate-y-full opacity-0";
+
+  return (
+    <h1
+      aria-label="Your supplier gets paid today. Get paid by your clients today. Not next week."
+      class="mt-6 font-display text-4xl font-bold leading-[1.05] sm:text-6xl"
+    >
+      {/* Padding keeps descenders (g, y, p) inside the clipped area. */}
+      <span aria-hidden="true" class="-mb-[0.15em] grid overflow-hidden pb-[0.15em]">
+        <For each={HERO_LINES}>
+          {(text, i) => (
+            <span
+              class={`col-start-1 row-start-1 transition-[transform,opacity] duration-[600ms] ease-out motion-reduce:transition-none ${position(i())}`}
+            >
+              {text}
+            </span>
+          )}
+        </For>
+      </span>
+      <span aria-hidden="true" class="text-flow">
+        Not next week.
+      </span>
+    </h1>
+  );
+}
+
 function Hero() {
   return (
     <section class="relative overflow-hidden px-5 pb-20 pt-16 sm:pt-24">
@@ -71,9 +131,7 @@ function Hero() {
           <span class="inline-flex items-center gap-2 rounded-full border border-accent/40 bg-accent/10 px-3 py-1 text-xs font-semibold text-accent">
             <Sparkles class="h-3.5 w-3.5" /> In development — waitlist open
           </span>
-          <h1 class="mt-6 font-display text-4xl font-bold leading-[1.05] sm:text-6xl">
-            Pay your supplier today. <span class="text-flow">Not next week.</span>
-          </h1>
+          <HeroHeading />
           <p class="mt-6 max-w-xl text-lg leading-relaxed text-muted-foreground">
             Meridian is for African businesses that import and export. Pay a factory in China, a
             packaging supplier in Ghana or a shipper in Dubai. Collect from a buyer in Germany or
