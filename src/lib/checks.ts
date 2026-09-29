@@ -135,6 +135,21 @@ export function checksOnCollected(input: {
   return hits;
 }
 
+/** Minutes a bank transfer may still land after a virtual account's stated expiry. */
+export const VIRTUAL_ACCOUNT_GRACE_MINUTES = 5;
+
+/**
+ * Whether an unpaid dynamic virtual account has lapsed. Payaza never reports a
+ * "Failed" status for these; an unpaid account just expires, so we decide by the
+ * clock, with a short grace for a transfer already in flight.
+ */
+export function virtualAccountLapsed(expiresAt: string | null, now = Date.now()): boolean {
+  if (!expiresAt) return false;
+  const t = Date.parse(expiresAt);
+  if (Number.isNaN(t)) return false;
+  return now > t + VIRTUAL_ACCOUNT_GRACE_MINUTES * 60_000;
+}
+
 /**
  * Loose match between the business's name and the name a partner returned for
  * its payout account. Case, punctuation and company suffixes are ignored; at

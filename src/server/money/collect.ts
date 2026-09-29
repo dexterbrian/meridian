@@ -3,6 +3,7 @@ import {
   checksBeforeCharge,
   checksOnCollected,
   strongestAction,
+  virtualAccountLapsed,
   type CheckHit,
 } from "~/lib/checks";
 import type { Json, Tables } from "~/lib/database.types";
@@ -860,6 +861,22 @@ export async function reconcileCollection(tx: Tx, source: EventSource): Promise<
     country: walletCountry(tx),
     transactionId: tx.id,
   });
+  if (state.state === "pending") {
+    // A dynamic virtual account never turns "Failed"; unpaid, it just expires
+    // (Payaza guide, step 3a). Payaza still says "Initialized" after the expiry
+    // and grace period, so no money came: close the attempt.
+    const payin = payinOf(tx);
+    if (payin?.kind === "virtual_account" && virtualAccountLapsed(payin.expiresAt)) {
+      await transition(
+        tx,
+        "awaiting_payin",
+        "failed",
+        { failure_reason: "The bank account expired before any money arrived." },
+        { source, payload: { statusQuery: state.raw, expiresAt: payin.expiresAt } },
+      );
+    }
+    return;
+  }
   if (state.state !== "success" && state.state !== "failed") return;
   await handleCollectionOutcome({
     reference: tx.reference,

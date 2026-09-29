@@ -3,9 +3,27 @@ import {
   LARGE_AMOUNT_USD,
   checksBeforeCharge,
   checksOnCollected,
+  VIRTUAL_ACCOUNT_GRACE_MINUTES,
   namesMatch,
   strongestAction,
+  virtualAccountLapsed,
 } from "./checks";
+
+describe("virtualAccountLapsed", () => {
+  const expires = "2026-09-29T10:00:00.000Z";
+  const at = (min: number) => Date.parse(expires) + min * 60_000;
+
+  it("is open until the grace period after expiry has passed", () => {
+    expect(virtualAccountLapsed(expires, at(-10))).toBe(false);
+    expect(virtualAccountLapsed(expires, at(VIRTUAL_ACCOUNT_GRACE_MINUTES))).toBe(false);
+    expect(virtualAccountLapsed(expires, at(VIRTUAL_ACCOUNT_GRACE_MINUTES + 1))).toBe(true);
+  });
+
+  it("never lapses without a usable expiry", () => {
+    expect(virtualAccountLapsed(null, at(999))).toBe(false);
+    expect(virtualAccountLapsed("not a date", at(999))).toBe(false);
+  });
+});
 
 const openRequest = { status: "active", usage: "single", paidCount: 0 };
 
