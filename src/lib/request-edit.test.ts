@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { expiryFrom, requestEditRules } from "./request-edit";
+import { expiryFrom, requestEditRules, requestableCurrencies } from "./request-edit";
 
 describe("requestEditRules", () => {
   it("allows everything on an active request nobody has tried to pay", () => {
@@ -24,6 +24,23 @@ describe("requestEditRules", () => {
       expect(r.canEditAmount).toBe(false);
       expect(r.reason).toContain(status);
     }
+  });
+});
+
+describe("requestableCurrencies", () => {
+  const all = ["KES", "UGX", "NGN", "USD"] as const;
+
+  it("offers only currencies the business can be paid out in, in list order", () => {
+    const accounts = [{ currency: "NGN" }, { currency: "KES" }, { currency: "KES" }];
+    expect(requestableCurrencies(accounts, all)).toEqual(["KES", "NGN"]);
+  });
+
+  it("offers nothing without a payout account", () => {
+    expect(requestableCurrencies([], all)).toEqual([]);
+  });
+
+  it("ignores a payout currency the app does not list", () => {
+    expect(requestableCurrencies([{ currency: "EUR" }], all)).toEqual([]);
   });
 });
 

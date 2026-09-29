@@ -33,6 +33,21 @@ export function requestEditRules(r: EditableRequest): EditRules {
   return { canEdit: true, canEditAmount: true, reason: null };
 }
 
+/**
+ * Currencies a business may request payment in: the ones it holds a payout
+ * account in. Payaza pays out only in the currency a payment was collected in
+ * (Payaza, 29 September 2026: no conversion for payouts, transfers or split
+ * settlement), so a request in any other currency could be paid but never paid out.
+ * Returned in the order of `all` (the app's currency list), without repeats.
+ */
+export function requestableCurrencies<C extends string>(
+  accounts: { currency: string }[],
+  all: readonly C[],
+): C[] {
+  const held = new Set(accounts.map((a) => a.currency));
+  return all.filter((c) => held.has(c));
+}
+
 /** Days from now to an expiry time, or null for "never". -1 means "keep what it is". */
 export function expiryFrom(days: number, now = Date.now()): string | null | undefined {
   if (days < 0) return undefined;

@@ -23,19 +23,27 @@ import {
   SELECT_CLASS,
 } from "~/components/ui/field";
 import { toast } from "~/components/ui/toast";
-import { CURRENCIES, METHOD_LABEL, formatMoney, type Currency, type PayMethod } from "~/lib/fees";
+import {
+  CURRENCY_CODES,
+  METHOD_LABEL,
+  formatMoney,
+  type Currency,
+  type PayMethod,
+} from "~/lib/fees";
 import { COUNTRY_NAMES } from "~/lib/payaza-codes";
-import { requestEditRules } from "~/lib/request-edit";
+import { requestEditRules, requestableCurrencies } from "~/lib/request-edit";
 import { paymentRequestUpdateSchema } from "~/lib/schemas";
 import { isTerminal, type TransactionStatus } from "~/lib/status";
 import {
   disablePaymentRequest,
   getPaymentRequest,
+  listPayoutAccounts,
   updatePaymentRequest,
   type PaymentRequest,
 } from "~/server/business-actions";
 
 const loadRequest = query((reference: string) => getPaymentRequest(reference), "request-detail");
+const loadAccounts = query(() => listPayoutAccounts(), "payout-accounts");
 
 export const route = {
   preload: ({ params }) => loadRequest(params["reference"] ?? ""),
@@ -45,7 +53,17 @@ const when = (iso: string) =>
   new Date(iso).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" });
 
 /** Edit form for an active request. Amount, currency and usage lock once a payer starts. */
-function EditRequestForm(props: { request: PaymentRequest; onDone: () => Promise<void> }) {
+function EditRequestForm(props: {
+  request: PaymentRequest;
+  /** Currencies the business holds payout accounts in (Payaza does not convert). */
+  payoutCurrencies: Currency[];
+  onDone: () => Promise<void>;
+}) {
+  // The request's own currency always stays listed, even if no longer requestable.
+  const currencies = () =>
+    props.payoutCurrencies.includes(props.request.currency as Currency)
+      ? props.payoutCurrencies
+      : [props.request.currency as Currency, ...props.payoutCurrencies];
   const rules = () => requestEditRules(props.request);
   const [busy, setBusy] = createSignal(false);
   const [errors, setErrors] = createSignal<Record<string, string>>({});
@@ -115,7 +133,7 @@ function EditRequestForm(props: { request: PaymentRequest; onDone: () => Promise
             disabled={!rules().canEditAmount}
             class={SELECT_CLASS}
           >
-            <For each={CURRENCIES}>{(c) => <option value={c.code}>{c.code}</option>}</For>
+            <For each={currencies()}>{(c) => <option value={c}>{c}</option>}</For>
           </select>
         </Field>
       </div>
@@ -189,6 +207,7 @@ function EditRequestForm(props: { request: PaymentRequest; onDone: () => Promise
 export default function RequestDetail() {
   const params = useParams<{ reference: string }>();
   const data = createAsync(() => loadRequest(params.reference));
+  const accounts = createAsync(() => loadAccounts());
   const [busy, setBusy] = createSignal(false);
   const [editing, setEditing] = createSignal(false);
 
@@ -293,6 +312,7 @@ export default function RequestDetail() {
                 <Show when={editing() && r().status === "active"}>
                   <EditRequestForm
                     request={r()}
+                    payoutCurrencies={requestableCurrencies(accounts() ?? [], CURRENCY_CODES)}
                     onDone={() => {
                       setEditing(false);
                       return revalidate([loadRequest.keyFor(params.reference), "dashboard"]);

@@ -4,10 +4,10 @@ import type { z } from "zod";
 import { namesMatch } from "~/lib/checks";
 import { toCsv } from "~/lib/csv";
 import type { Tables } from "~/lib/database.types";
-import { formatMoney, isCurrency, type Currency } from "~/lib/fees";
+import { CURRENCY_CODES, formatMoney, isCurrency, type Currency } from "~/lib/fees";
 import { COUNTRY_NAMES, ISO3, findNetwork } from "~/lib/payaza-codes";
 import { makeReference } from "~/lib/reference";
-import { expiryFrom, requestEditRules } from "~/lib/request-edit";
+import { expiryFrom, requestEditRules, requestableCurrencies } from "~/lib/request-edit";
 import {
   businessProfileSchema,
   paymentRequestSchema,
@@ -270,6 +270,23 @@ export type RequestRow = PaymentRequest & {
   > | null;
 };
 
+/**
+ * Why a business can't request payment in a currency, or null if it can. Payaza
+ * pays out only in the currency collected, so the business must hold a payout
+ * account in it (requestableCurrencies).
+ */
+async function unpayableCurrency(businessId: string, currency: string): Promise<string | null> {
+  const { data } = await db()
+    .from("payout_accounts")
+    .select("currency")
+    .eq("business_id", businessId);
+  const allowed = requestableCurrencies(data ?? [], CURRENCY_CODES);
+  if (allowed.includes(currency as Currency)) return null;
+  if (allowed.length === 0)
+    return "Add a payout account first. You can request payment in the currencies you have payout accounts in.";
+  return `You can't be paid out in ${currency}: Payaza pays out only in the currency the payer pays in, and you have no ${currency} payout account. Request ${allowed.join(" or ")}, or add a ${currency} payout account.`;
+}
+
 export async function createPaymentRequest(
   input: PaymentRequestInput,
 ): Promise<ActionResult<{ request: PaymentRequest; url: string }>> {
@@ -280,6 +297,8 @@ export async function createPaymentRequest(
   if (business.kyb_status === "frozen")
     return { ok: false, error: "This business is frozen. Contact support." };
   const d = parsed.data;
+  const currencyError = await unpayableCurrency(business.id, d.currency);
+  if (currencyError) return { ok: false, error: currencyError };
 
   // Idempotency: the same key from the same business returns the first request.
   const { data: existing } = await db()
@@ -452,6 +471,10 @@ export async function updatePaymentRequest(
     current.usage !== d.usage;
   if (amountChanged && !rules.canEditAmount)
     return { ok: false, error: rules.reason ?? "The amount can no longer change." };
+  if (d.currency !== current.currency) {
+    const currencyError = await unpayableCurrency(business.id, d.currency);
+    if (currencyError) return { ok: false, error: currencyError };
+  }
 
   const expires = expiryFrom(d.expires_in_days);
   const changes = {

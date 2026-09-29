@@ -15,7 +15,8 @@ import {
   SELECT_CLASS,
 } from "~/components/ui/field";
 import { toast } from "~/components/ui/toast";
-import { CURRENCIES, formatMoney, type Currency } from "~/lib/fees";
+import { CURRENCY_CODES, formatMoney, type Currency } from "~/lib/fees";
+import { requestableCurrencies } from "~/lib/request-edit";
 import { paymentRequestSchema } from "~/lib/schemas";
 import { createPaymentRequest, getMyBusiness, listPayoutAccounts } from "~/server/business-actions";
 
@@ -48,7 +49,14 @@ export default function NewRequest() {
     amount: string;
     invoice: string | null;
   } | null>(null);
-  const [cur, setCur] = createSignal<Currency>("KES");
+  // Only currencies the business can be paid out in: Payaza doesn't convert.
+  const currencies = () => requestableCurrencies(accounts() ?? [], CURRENCY_CODES);
+  const [picked, setPicked] = createSignal<Currency | null>(null);
+  const cur = (): Currency => {
+    const p = picked();
+    return p && currencies().includes(p) ? p : (currencies()[0] ?? "KES");
+  };
+  const setCur = (c: Currency) => setPicked(c);
 
   async function create(e: SubmitEvent & { currentTarget: HTMLFormElement }) {
     e.preventDefault();
@@ -129,168 +137,179 @@ export default function NewRequest() {
             </div>
           }
         >
-          <Show when={(accounts()?.length ?? 0) === 0}>
-            <div class="mt-6">
-              <Notice tone="warning">
-                You have no payout account yet. You can create the request, but payers will be told
-                to wait until you{" "}
-                <A href="/app/settings/payout-accounts" class="font-semibold underline">
-                  add one
-                </A>
-                .
-              </Notice>
-            </div>
-          </Show>
-
           <Show
-            when={created()}
+            when={currencies().length > 0}
             fallback={
-              <form onSubmit={create} class="panel mt-8 space-y-5 p-6">
-                <div class="grid gap-5 sm:grid-cols-[1fr_140px]">
-                  <Field label="Amount you receive" for="amount" error={errors()["amount"]}>
+              <div class="mt-8">
+                <Notice tone="warning">
+                  Add a{" "}
+                  <A href="/app/settings/payout-accounts" class="font-semibold underline">
+                    payout account
+                  </A>{" "}
+                  first. You can request payment in the currencies you have payout accounts in,
+                  because Payaza pays out only in the currency your payer pays in.
+                </Notice>
+              </div>
+            }
+          >
+            <Show
+              when={created()}
+              fallback={
+                <form onSubmit={create} class="panel mt-8 space-y-5 p-6">
+                  <div class="grid gap-5 sm:grid-cols-[1fr_140px]">
+                    <Field label="Amount you receive" for="amount" error={errors()["amount"]}>
+                      <input
+                        id="amount"
+                        name="amount"
+                        type="number"
+                        inputmode="decimal"
+                        min="0.01"
+                        step="0.01"
+                        required
+                        class={INPUT_CLASS}
+                      />
+                    </Field>
+                    <Field label="Currency" for="currency">
+                      <select
+                        id="currency"
+                        class={SELECT_CLASS}
+                        value={cur()}
+                        onChange={(e) => setCur(e.currentTarget.value as Currency)}
+                      >
+                        <For each={currencies()}>{(c) => <option value={c}>{c}</option>}</For>
+                      </select>
+                    </Field>
+                  </div>
+                  <p class="-mt-2 text-xs text-muted-foreground">
+                    Only the currencies you have{" "}
+                    <A href="/app/settings/payout-accounts" class="underline">
+                      payout accounts
+                    </A>{" "}
+                    in. Your payer pays in this currency, and Payaza pays you out in it; it doesn't
+                    convert between currencies.
+                  </p>
+                  <Field
+                    label="Your invoice number"
+                    for="invoice_number"
+                    optional
+                    hint="Shown on the pay page and both receipts. Searchable."
+                    error={errors()["invoice_number"]}
+                  >
                     <input
-                      id="amount"
-                      name="amount"
-                      type="number"
-                      inputmode="decimal"
-                      min="0.01"
-                      step="0.01"
-                      required
+                      id="invoice_number"
+                      name="invoice_number"
+                      placeholder="e.g. AF-0917"
                       class={INPUT_CLASS}
                     />
                   </Field>
-                  <Field label="Currency" for="currency">
-                    <select
-                      id="currency"
-                      class={SELECT_CLASS}
-                      value={cur()}
-                      onChange={(e) => setCur(e.currentTarget.value as Currency)}
+                  <Field label="Note to the payer" for="memo" optional error={errors()["memo"]}>
+                    <input
+                      id="memo"
+                      name="memo"
+                      placeholder="e.g. Roses, 40 boxes, week 39"
+                      class={INPUT_CLASS}
+                    />
+                  </Field>
+                  <div class="grid gap-5 sm:grid-cols-2">
+                    <Field
+                      label="Payer's email"
+                      for="payer_email"
+                      optional
+                      hint="We email them the link."
+                      error={errors()["payer_email"]}
                     >
-                      <For each={CURRENCIES}>{(c) => <option value={c.code}>{c.code}</option>}</For>
+                      <input id="payer_email" name="payer_email" type="email" class={INPUT_CLASS} />
+                    </Field>
+                    <Field label="Link expires" for="expires_in_days">
+                      <select id="expires_in_days" name="expires_in_days" class={SELECT_CLASS}>
+                        <option value="0">Never</option>
+                        <option value="7">In 7 days</option>
+                        <option value="30">In 30 days</option>
+                        <option value="90">In 90 days</option>
+                      </select>
+                    </Field>
+                  </div>
+                  <Field label="How many times can it be paid?" for="usage">
+                    <select id="usage" name="usage" class={SELECT_CLASS}>
+                      <option value="single">Once (an invoice)</option>
+                      <option value="multi">
+                        Many times (a standing price, e.g. a course or event)
+                      </option>
                     </select>
                   </Field>
+                  <div class="flex justify-end pt-2">
+                    <button type="submit" disabled={busy()} class={BUTTON_PRIMARY}>
+                      {busy() ? "Creating…" : "Create payment link"}
+                    </button>
+                  </div>
+                </form>
+              }
+            >
+              {(c) => (
+                <div class="panel mt-8 space-y-5 p-6">
+                  <div>
+                    <p class="text-xs uppercase tracking-widest text-muted-foreground">
+                      Payment link
+                    </p>
+                    <h2 class="mt-1 font-display text-2xl font-bold">{c().amount}</h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                      <Show when={c().invoice}>Invoice {c().invoice} · </Show>
+                      <span class="font-mono text-primary">{c().reference}</span>
+                    </p>
+                  </div>
+                  <div class="flex items-center gap-2 rounded-xl border border-border bg-surface/60 p-3">
+                    <input
+                      readOnly
+                      aria-label="Payment link"
+                      value={c().url}
+                      class="flex-1 bg-transparent font-mono text-sm outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => copy(c().url)}
+                      class={BUTTON_SECONDARY}
+                      aria-label="Copy link"
+                    >
+                      <Copy class="h-4 w-4" />
+                    </button>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <a
+                      href={`https://wa.me/?text=${encodeURIComponent(shareText())}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      class={BUTTON_SECONDARY}
+                    >
+                      <MessageCircle class="h-4 w-4" /> WhatsApp
+                    </a>
+                    <a
+                      href={`mailto:?subject=${encodeURIComponent(`Payment request ${c().reference}`)}&body=${encodeURIComponent(shareText())}`}
+                      class={BUTTON_SECONDARY}
+                    >
+                      <Mail class="h-4 w-4" /> Email
+                    </a>
+                    <a href={c().url} target="_blank" rel="noreferrer" class={BUTTON_SECONDARY}>
+                      <ExternalLink class="h-4 w-4" /> Open pay page
+                    </a>
+                  </div>
+                  <div class="flex flex-wrap justify-between gap-2 pt-2">
+                    <A
+                      href={`/app/collect/${c().reference}`}
+                      class="text-sm text-primary hover:underline"
+                    >
+                      Track this request
+                    </A>
+                    <button
+                      type="button"
+                      onClick={() => setCreated(null)}
+                      class="text-sm text-muted-foreground hover:text-foreground"
+                    >
+                      Create another
+                    </button>
+                  </div>
                 </div>
-                <Field
-                  label="Your invoice number"
-                  for="invoice_number"
-                  optional
-                  hint="Shown on the pay page and both receipts. Searchable."
-                  error={errors()["invoice_number"]}
-                >
-                  <input
-                    id="invoice_number"
-                    name="invoice_number"
-                    placeholder="e.g. AF-0917"
-                    class={INPUT_CLASS}
-                  />
-                </Field>
-                <Field label="Note to the payer" for="memo" optional error={errors()["memo"]}>
-                  <input
-                    id="memo"
-                    name="memo"
-                    placeholder="e.g. Roses, 40 boxes, week 39"
-                    class={INPUT_CLASS}
-                  />
-                </Field>
-                <div class="grid gap-5 sm:grid-cols-2">
-                  <Field
-                    label="Payer's email"
-                    for="payer_email"
-                    optional
-                    hint="We email them the link."
-                    error={errors()["payer_email"]}
-                  >
-                    <input id="payer_email" name="payer_email" type="email" class={INPUT_CLASS} />
-                  </Field>
-                  <Field label="Link expires" for="expires_in_days">
-                    <select id="expires_in_days" name="expires_in_days" class={SELECT_CLASS}>
-                      <option value="0">Never</option>
-                      <option value="7">In 7 days</option>
-                      <option value="30">In 30 days</option>
-                      <option value="90">In 90 days</option>
-                    </select>
-                  </Field>
-                </div>
-                <Field label="How many times can it be paid?" for="usage">
-                  <select id="usage" name="usage" class={SELECT_CLASS}>
-                    <option value="single">Once (an invoice)</option>
-                    <option value="multi">
-                      Many times (a standing price, e.g. a course or event)
-                    </option>
-                  </select>
-                </Field>
-                <div class="flex justify-end pt-2">
-                  <button type="submit" disabled={busy()} class={BUTTON_PRIMARY}>
-                    {busy() ? "Creating…" : "Create payment link"}
-                  </button>
-                </div>
-              </form>
-            }
-          >
-            {(c) => (
-              <div class="panel mt-8 space-y-5 p-6">
-                <div>
-                  <p class="text-xs uppercase tracking-widest text-muted-foreground">
-                    Payment link
-                  </p>
-                  <h2 class="mt-1 font-display text-2xl font-bold">{c().amount}</h2>
-                  <p class="mt-1 text-sm text-muted-foreground">
-                    <Show when={c().invoice}>Invoice {c().invoice} · </Show>
-                    <span class="font-mono text-primary">{c().reference}</span>
-                  </p>
-                </div>
-                <div class="flex items-center gap-2 rounded-xl border border-border bg-surface/60 p-3">
-                  <input
-                    readOnly
-                    aria-label="Payment link"
-                    value={c().url}
-                    class="flex-1 bg-transparent font-mono text-sm outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => copy(c().url)}
-                    class={BUTTON_SECONDARY}
-                    aria-label="Copy link"
-                  >
-                    <Copy class="h-4 w-4" />
-                  </button>
-                </div>
-                <div class="flex flex-wrap gap-2">
-                  <a
-                    href={`https://wa.me/?text=${encodeURIComponent(shareText())}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    class={BUTTON_SECONDARY}
-                  >
-                    <MessageCircle class="h-4 w-4" /> WhatsApp
-                  </a>
-                  <a
-                    href={`mailto:?subject=${encodeURIComponent(`Payment request ${c().reference}`)}&body=${encodeURIComponent(shareText())}`}
-                    class={BUTTON_SECONDARY}
-                  >
-                    <Mail class="h-4 w-4" /> Email
-                  </a>
-                  <a href={c().url} target="_blank" rel="noreferrer" class={BUTTON_SECONDARY}>
-                    <ExternalLink class="h-4 w-4" /> Open pay page
-                  </a>
-                </div>
-                <div class="flex flex-wrap justify-between gap-2 pt-2">
-                  <A
-                    href={`/app/collect/${c().reference}`}
-                    class="text-sm text-primary hover:underline"
-                  >
-                    Track this request
-                  </A>
-                  <button
-                    type="button"
-                    onClick={() => setCreated(null)}
-                    class="text-sm text-muted-foreground hover:text-foreground"
-                  >
-                    Create another
-                  </button>
-                </div>
-              </div>
-            )}
+              )}
+            </Show>
           </Show>
         </Show>
       </Suspense>
