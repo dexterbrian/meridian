@@ -1317,6 +1317,39 @@ export async function adminMarkRefunded(tx: Tx, adminId: string, note: string): 
 
 /* -------------------------------- sandbox --------------------------------- */
 
+/**
+ * Sandbox only. Records a bank transfer into a test virtual account that Payaza's
+ * sandbox would not fund. The event payload and the quote both say "simulated",
+ * so the history shows plainly that Payaza did not confirm this money.
+ */
+async function simulateVirtualAccountPayment(tx: Tx, payazaMessage: string): Promise<void> {
+  if (env.mode !== "sandbox") throw new CollectError("invalid", "Only in sandbox mode.");
+  const reason = `Payaza's sandbox would not fund the test account (${payazaMessage}), so Meridian simulated the transfer.`;
+  await db()
+    .from("transactions")
+    .update({
+      quote: {
+        ...((tx.quote ?? {}) as Record<string, unknown>),
+        collectionSimulated: true,
+      } as NonNullable<Json>,
+    })
+    .eq("id", tx.id);
+  await handleCollectionOutcome({
+    reference: tx.reference,
+    outcome: "success",
+    facts: {
+      amountReceived: Number(tx.total_charged),
+      fee: null,
+      currency: tx.send_currency,
+      payerName: tx.payer_name,
+      partnerReference: null,
+    },
+    source: "system",
+    payload: { simulated: true, reason },
+    confirmed: true,
+  });
+}
+
 /** Sandbox only: plays the payer approving on their phone or paying the virtual account. */
 export async function simulatePayerApproval(transactionId: string): Promise<void> {
   if (env.mode !== "sandbox") throw new CollectError("invalid", "Only in sandbox mode.");
@@ -1341,11 +1374,14 @@ export async function simulatePayerApproval(transactionId: string): Promise<void
       payerName: tx.payer_name ?? "Test Payer",
       transactionId: tx.id,
     });
-    if (!r.data?.success)
-      throw new CollectError(
-        "partner",
-        r.data?.message ?? "Payaza did not accept the test funding.",
-      );
+    if (!r.data?.success) {
+      // Payaza's sandbox refuses to fund dynamic accounts ("Failed to fund virtual
+      // account" on 78 Finance, "Providus funding NA-01" on Globus), even with the
+      // documented request. Checked 29 September 2026. So in sandbox we record the
+      // transfer ourselves, marked simulated, and carry on as the webhook would.
+      await simulateVirtualAccountPayment(tx, r.data?.message ?? `HTTP ${r.status}`);
+      return;
+    }
   } else {
     throw new CollectError("invalid", "Use a Payaza test card in the checkout.");
   }

@@ -277,7 +277,8 @@ export function fundTestVirtualAccount(input: {
   return payazaCall<{ success: boolean; message: string }>({
     method: "POST",
     path: "/merchant-collection/payaza/virtual_account/fund_test_virtual_account",
-    tenant: false,
+    // The docs list X-TenantID and X-ProductID for this endpoint, unlike account creation.
+    product: true,
     transactionId: input.transactionId,
     body: {
       account_name: input.accountName,
