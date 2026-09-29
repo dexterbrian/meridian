@@ -249,6 +249,9 @@ export function createDynamicVirtualAccount(input: {
       account_name: input.accountName,
       account_type: "Dynamic",
       bank_code: input.bankCode,
+      // Required even though it is empty for dynamic accounts; without it Payaza
+      // answers "Virtual account not generated".
+      bvn: "",
       has_amount_validation: "true",
       account_reference: input.reference,
       customer_first_name: input.firstName,

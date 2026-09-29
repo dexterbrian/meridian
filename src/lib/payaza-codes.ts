@@ -149,8 +149,13 @@ export function payoutMethodsFor(currency: Currency): ("bank" | "momo")[] {
   return (["momo", "bank"] as const).filter((m) => payoutRail(currency, m) !== null);
 }
 
-/** Nigerian virtual accounts are issued by Globus Bank in Payaza's sandbox and live. */
-export const VIRTUAL_ACCOUNT_BANK_CODE = "140";
+/**
+ * Bank that issues Nigerian virtual accounts. Payaza offers "140" (Globus) and
+ * "1067" (78 Finance). In the sandbox on 29 September 2026, Globus failed about
+ * half the time whatever the reference looked like (dashes, underscores or
+ * plain letters), while 78 Finance succeeded every time. So we use 78 Finance.
+ */
+export const VIRTUAL_ACCOUNT_BANK_CODE = "1067";
 export const VIRTUAL_ACCOUNT_MINUTES = 30;
 
 /**
