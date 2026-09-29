@@ -31,6 +31,12 @@ export function SiteHeader() {
         </nav>
         <div class="flex items-center gap-3">
           <a
+            href="/auth/sign-in"
+            class="hidden rounded-full border border-border px-5 py-2.5 text-sm font-semibold transition-colors hover:bg-secondary sm:inline-flex"
+          >
+            Sign in
+          </a>
+          <a
             href="/#waitlist"
             class="hidden rounded-full bg-flow px-5 py-2.5 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 sm:inline-flex"
           >
@@ -50,7 +56,13 @@ export function SiteHeader() {
       </div>
       <Show when={open()}>
         <nav class="flex flex-col gap-1 border-t border-border px-5 py-3 md:hidden">
-          <For each={[...NAV, { label: "Join the waitlist", href: "/#waitlist" }]}>
+          <For
+            each={[
+              ...NAV,
+              { label: "Sign in", href: "/auth/sign-in" },
+              { label: "Join the waitlist", href: "/#waitlist" },
+            ]}
+          >
             {(item) => (
               <a
                 href={item.href}
