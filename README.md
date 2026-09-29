@@ -188,6 +188,6 @@ npx supabase gen types typescript --local > src/lib/database.types.ts
 4. Payaza dashboard: collection and payout webhook URLs `https://meridian.appify.co.ke/api/webhooks/payaza`.
 5. Mark Brian as admin (above).
 
-The cron every 10 minutes needs Vercel Pro. On Hobby, hit `GET /api/jobs/payout-retry` with `Authorization: Bearer <JOBS_SECRET>` from any external scheduler, or use the "Run payout sweep" button in `/admin`.
+`vercel.json` runs the payout sweep once a day (03:00 UTC), the most Vercel's Hobby plan allows. For every 10 minutes, upgrade to Pro, or hit `GET /api/jobs/payout-retry` with `Authorization: Bearer <JOBS_SECRET>` from any external scheduler, or use the "Run payout sweep" button in `/admin`.
 
 A Cloudflare Workers build also exists: `npm run build:workers` then `npx wrangler deploy --config .output/server/wrangler.json`.
