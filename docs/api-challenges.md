@@ -8,7 +8,7 @@
 | Environment | Test mode: `https://api.payaza.africa/live/…` with `X-TenantID: test` and a test public key |
 | Dates tested | 28 and 29 September 2026 |
 
-We built a collection flow on Payaza: mobile money, NGN dynamic virtual accounts, card checkout, account name enquiry and Transfers. Most of it works well in the sandbox. Four things got in our way. Each is written up below with what we sent, what we expected, what came back, and what would help.
+We built a collection flow on Payaza: mobile money, NGN dynamic virtual accounts, card checkout, account name enquiry and Transfers. Most of it works well in the sandbox. Five things got in our way. Each is written up below with what we sent, what we expected, what came back, and what would help.
 
 Every example uses a placeholder for our key. Nothing below depends on our account; each should reproduce on any test key.
 
@@ -20,6 +20,7 @@ Every example uses a placeholder for our key. Nothing below depends on our accou
 | 2 | Funding a test virtual account always fails | `POST /merchant-collection/payaza/virtual_account/fund_test_virtual_account` | Can't test an NGN bank transfer end to end in the sandbox |
 | 3 | Globus (`140`) virtual accounts fail about half the time | `POST /merchant-collection/merchant/virtual_account/generate_virtual_account` | Payers see random failures if we use Globus |
 | 4 | `bvn` is listed as optional but omitting it fails | same as 3 | Cost us time; the error doesn't say what's missing |
+| 5 | No published fee table, and no way to get a fee before payment | none exists | We can't show the payer an exact total up front |
 
 We also note some smaller inconsistencies at the end.
 
@@ -183,6 +184,26 @@ At first we thought Globus rejected dashes. It doesn't: the same request succeed
 The virtual account docs list `bvn` as not required, with an empty string for dynamic accounts. Without the field at all, the same request fails with `"Virtual account not generated, please try again"`. With `"bvn": ""` it succeeds (on `1067`). The error message didn't point to the missing field, so this took a while to find.
 
 **What would help.** Mark `bvn` as required (empty for dynamic accounts), or accept its absence. And name the missing field in the error.
+
+---
+
+## 5. No published fee table, and no way to get a fee before payment
+
+**What we need.** Our payers cover the fees, so the business receives exactly what it invoiced. To do that, the pay page has to show the payer the full total, fees included, before they pay. That means knowing Payaza's fee for the method and currency the payer picks.
+
+**What we found.**
+- The docs have no fee or pricing page, and no endpoint that returns a fee for a proposed charge.
+- The fee only appears after payment: in the Web Checkout callback (`transaction_fee`), the transaction status queries (`transaction_fee`), the webhook, and the payment link transactions list (`transaction_fee_amount`).
+- Payment links can add the fee on top (`fee_bearer_type: "Customer"`), but they don't say what that fee will be either.
+- In the sandbox every fee comes back as `0`, so fee handling can't be tested there.
+
+**Impact.** We keep our own table of fees per method and currency, and compare it with the fee Payaza reports after each payment. If our table is wrong, the payer is charged too much or too little and we only find out afterwards.
+
+**What would help.** Either of these:
+- A current fee and rates table, per payment method, currency and country, kept up to date in the docs or the dashboard. Ideally something we can fetch through the API, so our table updates when Payaza's prices change.
+- A fee quote endpoint: send an amount, currency and method, get back the fee and the total the payer will pay.
+
+And sandbox fees that match live pricing, so the fee path can be tested.
 
 ---
 
