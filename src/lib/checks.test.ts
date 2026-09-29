@@ -86,6 +86,17 @@ describe("checksOnCollected", () => {
     expect(checksOnCollected({ ...base, reportedPartnerFee: 206.2 })).toEqual([]);
   });
 
+  it("ignores a zero fee in sandbox, where Payaza charges nothing", () => {
+    expect(checksOnCollected({ ...base, reportedPartnerFee: 0, sandbox: true })).toEqual([]);
+    // A real gap still shows in sandbox, and a zero fee still shows in live.
+    expect(
+      checksOnCollected({ ...base, reportedPartnerFee: 250, sandbox: true }).map((h) => h.rule),
+    ).toEqual(["H_FEE_MISMATCH"]);
+    expect(
+      checksOnCollected({ ...base, reportedPartnerFee: 0, sandbox: false }).map((h) => h.rule),
+    ).toEqual(["H_FEE_MISMATCH"]);
+  });
+
   it("holds on a currency mismatch", () => {
     const hits = checksOnCollected({ ...base, reportedCurrency: "USD" });
     expect(hits.map((h) => h.rule)).toEqual(["H_CURRENCY_MISMATCH"]);

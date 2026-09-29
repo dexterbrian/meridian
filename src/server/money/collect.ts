@@ -806,6 +806,7 @@ export async function handleCollectionOutcome(input: {
       : { status: "disabled", usage: "single", paidCount: 0 },
     expectedPartnerFee: Number(collected.partner_fee_in),
     reportedPartnerFee: facts.fee,
+    sandbox: env.mode === "sandbox",
   });
   await addFlags(collected, hits, business?.name ?? "");
 

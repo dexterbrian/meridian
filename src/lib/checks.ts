@@ -71,9 +71,15 @@ export function checksOnCollected(input: {
   reportedCurrency: string | null;
   /** State of the payment request at the time of the webhook. */
   request: { status: string; usage: string; paidCount: number };
-  /** Our fee schedule vs Payaza's reported fee. */
+  /**
+   * Our fee schedule vs Payaza's reported fee. Payaza has no endpoint that quotes
+   * a fee before payment, so the schedule is the only way to show the payer the
+   * fee up front; this check is how a wrong schedule gets noticed.
+   */
   expectedPartnerFee: number;
   reportedPartnerFee: number | null;
+  /** Payaza's sandbox charges no fees and reports 0, which says nothing about the schedule. */
+  sandbox?: boolean;
 }): CheckHit[] {
   const hits: CheckHit[] = [];
 
@@ -111,8 +117,10 @@ export function checksOnCollected(input: {
     });
   }
 
+  const sandboxZeroFee = input.sandbox === true && input.reportedPartnerFee === 0;
   if (
     input.reportedPartnerFee !== null &&
+    !sandboxZeroFee &&
     Math.abs(input.reportedPartnerFee - input.expectedPartnerFee) > 0.01
   ) {
     hits.push({
