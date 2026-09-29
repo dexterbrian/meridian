@@ -43,3 +43,19 @@ export function guardRoute(pathname: string, search: string, viewer: Viewer | nu
 export function isGuardedPath(pathname: string): boolean {
   return under(pathname, "/app") || under(pathname, "/admin");
 }
+
+/**
+ * Where to send a sign-in link that landed on the home page. Supabase falls back
+ * to the project's Site URL when the requested redirect isn't on its allow list,
+ * so the link can arrive as /?code=… (PKCE) or /?token_hash=…&type=… instead of
+ * at /auth/callback. Returns the callback URL to forward to, or null if the
+ * request is not a sign-in link.
+ */
+export function authLinkForward(pathname: string, search: string): string | null {
+  if (pathname !== "/") return null;
+  const params = new URLSearchParams(search);
+  const isLink = params.has("code") || (params.has("token_hash") && params.has("type"));
+  if (!isLink) return null;
+  if (!params.has("next")) params.set("next", "/app");
+  return `/auth/callback?${params.toString()}`;
+}

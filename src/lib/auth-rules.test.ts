@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { guardRoute, isAdminMetadata, safeNext, type Viewer } from "./auth-rules";
+import { authLinkForward, guardRoute, isAdminMetadata, safeNext, type Viewer } from "./auth-rules";
 
 const user: Viewer = { id: "u1", email: "amina@kilimo.co.ke", isAdmin: false };
 const admin: Viewer = { id: "u2", email: "brian@appify.co.ke", isAdmin: true };
@@ -50,5 +50,24 @@ describe("safeNext", () => {
     expect(safeNext("//evil.example")).toBe("/app");
     expect(safeNext("/\\evil.example")).toBe("/app");
     expect(safeNext(null)).toBe("/app");
+  });
+});
+
+describe("authLinkForward", () => {
+  it("forwards a PKCE sign-in link that landed on the home page", () => {
+    expect(authLinkForward("/", "?code=abc123")).toBe("/auth/callback?code=abc123&next=%2Fapp");
+  });
+
+  it("forwards a token-hash link and keeps its own next", () => {
+    expect(authLinkForward("/", "?token_hash=h1&type=email&next=%2Fadmin")).toBe(
+      "/auth/callback?token_hash=h1&type=email&next=%2Fadmin",
+    );
+  });
+
+  it("leaves ordinary pages and other paths alone", () => {
+    expect(authLinkForward("/", "")).toBeNull();
+    expect(authLinkForward("/", "?utm_source=x")).toBeNull();
+    expect(authLinkForward("/", "?token_hash=h1")).toBeNull();
+    expect(authLinkForward("/pricing", "?code=abc")).toBeNull();
   });
 });
