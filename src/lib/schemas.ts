@@ -52,6 +52,8 @@ export const demoSendSchema = z.object({
   to: currency,
   payout: z.enum(["bank", "momo"]),
   recipient: text(200).min(1),
+  /** Where the recipient is paid, already masked, e.g. "Equity Bank ••••6789". */
+  destination: optionalText(120),
   email: z.email().max(254),
 });
 
