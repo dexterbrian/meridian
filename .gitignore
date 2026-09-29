@@ -41,3 +41,6 @@ supabase/.branches
 # Vercel build output
 .vercel
 
+
+.vercel
+.env*
