@@ -34,6 +34,15 @@ export async function requestSignInCode(email: string, next: string): Promise<Au
   });
   if (error) {
     console.error("[auth] signInWithOtp failed", error.message);
+    // Supabase caps sign-in emails per hour (a handful on its built-in mail
+    // service). "Try again in a minute" is wrong for that case.
+    if (/rate limit/i.test(error.message) || error.status === 429) {
+      return {
+        ok: false,
+        error:
+          "Too many sign-in emails have been sent in the last hour. If you already have one, use its code. Otherwise please try again later.",
+      };
+    }
     return { ok: false, error: "We couldn't send a code. Please try again in a minute." };
   }
   return { ok: true };
