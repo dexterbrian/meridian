@@ -2,6 +2,11 @@
 # dashboard; keep these auth settings and the email template in step with it.
 project_id = "meridian"
 
+# Local test data, loaded on `npx supabase db reset`. See supabase/seed.sql.
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
 [auth]
 site_url = "http://localhost:3000"
 additional_redirect_urls = ["http://localhost:3000/auth/callback", "http://127.0.0.1:3000/auth/callback"]
