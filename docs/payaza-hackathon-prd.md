@@ -246,7 +246,7 @@ IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time a
 | H-25 | Apple Pay and Google Pay | Should | Comes with Web Checkout; not exercised |
 | H-26 | Webhook handler: verify the HMAC SHA512 signature, match the reference, ignore repeats | Must | Done (`/api/webhooks/payaza`) |
 | H-27 | Status query as a fallback when a webhook is late | Must | Done. The pay page's poll asks Payaza after 15 seconds; the retry job asks after 2 minutes. |
-| H-28 | Split settlement: Meridian's 1% to Meridian | Must once Payaza confirms KES support and fees | Not used. Transfers is the payout path; the 1% stays in the Payaza balance. |
+| H-28 | Split settlement: Meridian's 1% to Meridian | Dropped | Not used, by decision. Meridian is the Payaza merchant, so its 1% never leaves its own Payaza balance; splitting it to itself adds nothing. Split also can't convert currencies (Payaza, 29 Sep). Transfers pays the business; the 1% stays in the balance of the currency it was collected in. |
 | H-29 | Payout to the business through Payaza Transfers, in the payout account's currency, after the payment is confirmed | Must | Sandbox-blocked. Code complete; the test merchant has no payout float, so `PAYAZA_SIMULATE_PAYOUTS` stands in and the timeline says so. |
 
 ### 6.4 Idempotency and references
@@ -336,7 +336,7 @@ _Blocks the live demo — please answer first:_
 
 _Affects the product but not the live demo:_
 
-5. **Cross-currency payout.** If a customer pays in GHS, XOF, NGN or USD, can you pay the business out in a different currency (KES, UGX, TZS …) from the balance that payment landed in? If so, who does the conversion and at what rate, and which endpoint carries it? Today we only pay out when the payout account currency matches the payment currency.
+5. ~~**Cross-currency payout.**~~ **Answered by Payaza, 29 September 2026: no.** Payaza does not convert a payment received in one currency (GHS, USD …) into another (KES …) for payouts or transfers, and split settlement does not convert either. A payment can only pay out in the currency it was collected in.
 
 6. **Card limits for large B2B payments.** One of our exporters collects USD 35,000–40,000 per shipment by card. What is the per-transaction and daily card limit, and is 3DS required at that size?
 
@@ -352,7 +352,7 @@ _Corridor coverage (for the roadmap, not the demo):_
 
 11. Does **Rwanda (RWF)** mobile money collection work? RWF is in your currency list but not your mobile money list.
 12. Is **South Sudan (SSP)** collection on your roadmap? A customer there can pay us by USD card today, but not by local mobile money.
-13. Does **split settlement** support KES, and does it work across currencies? We are using Transfers instead for now.
+13. ~~Does **split settlement** support KES, and does it work across currencies?~~ **Answered by Payaza, 29 September 2026:** split settlement does not convert between currencies; a USD payment can't be split and settled in KES. Transfers stays the payout path.
 
 _Answered:_
 - Hackathon dates: build 28/09/2026, demo 29/09/2026, submit the web app link.
