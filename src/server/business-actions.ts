@@ -121,6 +121,11 @@ export async function listPayoutAccounts(): Promise<PayoutAccount[]> {
   return data ?? [];
 }
 
+/** True when Meridian talks to Payaza's sandbox, where name checks return a canned name. */
+export async function isSandbox(): Promise<boolean> {
+  return env.mode === "sandbox";
+}
+
 export type NameCheck = {
   resolvedName: string | null;
   matches: boolean;

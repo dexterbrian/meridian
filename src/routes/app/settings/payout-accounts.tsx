@@ -18,6 +18,7 @@ import { COUNTRY_NAMES, networksFor, payoutMethodsFor } from "~/lib/payaza-codes
 import { payoutAccountSchema } from "~/lib/schemas";
 import {
   getMyBusiness,
+  isSandbox,
   listPayoutAccounts,
   savePayoutAccount,
   setDefaultPayoutAccount,
@@ -27,11 +28,13 @@ import {
 
 const loadAccounts = query(() => listPayoutAccounts(), "payout-accounts");
 const loadBusiness = query(() => getMyBusiness(), "my-business");
+const loadSandbox = query(() => isSandbox(), "is-sandbox");
 
 export const route = {
   preload: () => {
     void loadAccounts();
     void loadBusiness();
+    void loadSandbox();
   },
 } satisfies RouteDefinition;
 
@@ -45,6 +48,7 @@ type Details = {
 export default function PayoutAccounts() {
   const accounts = createAsync(() => loadAccounts());
   const business = createAsync(() => loadBusiness());
+  const sandbox = createAsync(() => loadSandbox());
   const [busy, setBusy] = createSignal(false);
   const [check, setCheck] = createSignal<NameCheck | null>(null);
   const [cur, setCur] = createSignal<Currency>("KES");
@@ -182,15 +186,28 @@ export default function PayoutAccounts() {
                       </p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
+                      {/* Payaza's sandbox names every account "Chibunkem Ojiaku", so a
+                          mismatch there says nothing about the account. Live mode checks for real. */}
                       <span
+                        title={
+                          !a.validated && sandbox()
+                            ? `Payaza's test mode returns the same test name (${a.validated_name ?? "none"}) for every account, so the name can't be checked until live mode.`
+                            : undefined
+                        }
                         class={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
                           a.validated
                             ? "border-success/40 bg-success/15 text-success"
-                            : "border-warning/50 bg-warning/15 text-warning"
+                            : sandbox()
+                              ? "border-border bg-secondary/60 text-muted-foreground"
+                              : "border-warning/50 bg-warning/15 text-warning"
                         }`}
                       >
                         <ShieldCheck class="h-3.5 w-3.5" />
-                        {a.validated ? "Name verified" : "Name not matched"}
+                        {a.validated
+                          ? "Name verified"
+                          : sandbox()
+                            ? "Name check: test mode"
+                            : "Name not matched"}
                       </span>
                       <Show when={!a.is_default}>
                         <button
