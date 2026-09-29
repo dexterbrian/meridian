@@ -182,12 +182,14 @@ export default function RequestDemo() {
                       <Copy class="h-4 w-4" />
                     </button>
                   </div>
-                  <A
+                  <a
                     href={`/pay/${c().reference}`}
+                    target="_blank"
+                    rel="noreferrer"
                     class="inline-flex w-full items-center justify-center rounded-full border border-primary/60 bg-primary/10 px-6 py-3 text-sm font-semibold text-primary hover:bg-primary/20"
                   >
                     Open it as the payer
-                  </A>
+                  </a>
                   <Show when={toEmail()}>
                     <p class="text-xs text-muted-foreground">
                       A demo request email was sent to {toEmail()}.
