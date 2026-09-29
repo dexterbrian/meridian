@@ -231,7 +231,7 @@ IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time a
 | H-12 | Fee summary under the amount, with fees at 0 until a method is picked | Must | Done |
 | H-13 | "See breakdown" opens the full breakdown beside the form. On phones it scrolls down to it. | Must | Done |
 | H-14 | The payer pays fees on top. The business gets the exact amount. | Must | Done, including whole-unit rounding for M-Pesa (5.3) |
-| H-15 | Show the payer's amount in their own currency before they pay | Must | Partly. The pay page charges in the request currency; a Ghanaian buyer of a KES request needs a GHS request or Payaza's conversion answer (section 9, question 1). |
+| H-15 | Show the payer's amount in their own currency before they pay | Won't do | Payaza does not convert currencies (section 9, question 5, answered 29 Sep), so the payer always pays in the request currency. Requests are limited to the currencies the business holds payout accounts in, so every request can be paid out. |
 | H-16 | Receipt email to the payer with invoice number and reference | Must | Done (needs `RESEND_API_KEY` to deliver) |
 
 ### 6.3 Payaza integration
@@ -297,13 +297,14 @@ IDs use the `H-` prefix. Priority: **Must** (in the demo), **Should** (if time a
 
 One order, told end to end.
 
-1. Ann signs in. She creates a request for KES 650,000 with her invoice number `AF-0917` and sends the link on WhatsApp.
+1. Ann signs in. She creates a request for KES 650,000 with her invoice number `AF-0917` and sends the link on WhatsApp. The currency list offers only KES, because her payout account is in KES and Payaza pays out only in the currency the payer pays in.
 2. Her buyer opens it. Fees show 0 until they pick mobile money. Then the fees and the payer total (KES 670,104) appear, with the breakdown.
-3. The buyer pays with M-Pesa in Payaza's sandbox. (Payaza's test account has KES enabled; GHS is pending, see section 9. If Payaza enables Ghana in time, the buyer pays in cedis instead.) The "Simulate approval on the phone" button plays the buyer entering their PIN.
+3. The buyer pays with M-Pesa in Payaza's sandbox. The "Simulate approval on the phone" button plays the buyer entering their PIN. (A buyer paying in cedis would need Ann to hold a GHS payout account: Payaza does not convert currencies.)
 4. Payaza's webhook arrives. The timeline moves to "Paid", then "Paying out", then "Settled". (Payout simulated unless Payaza funds the test float.)
 5. Ann's dashboard shows KES 650,000 received against `AF-0917`, and the request page shows the attempt's timeline. Both sides have receipts.
 6. We replay the same webhook with curl. The response says `duplicate` and nothing changes. That shows idempotency. Then we click Pay on the same link again: the database refuses because the request is paid.
-7. Close with Chris (USD card from Europe) and AfricaHackon (USD card from South Sudan) on one slide, and the admin page showing a held payment released.
+7. Show the admin page with a held payment released.
+8. Close honestly on what Payaza can't do yet. Chris's European buyers and AfricaHackon's South Sudanese customers would pay by card in USD, but Payaza has no USD payouts and no currency conversion, so those payments can't reach a Kenyan business today. Those two features are our ask to Payaza.
 
 ---
 
