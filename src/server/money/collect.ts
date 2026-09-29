@@ -261,7 +261,17 @@ function splitName(full: string): { first: string; last: string } {
 }
 
 function payinOf(tx: Tx): PayinDetails | null {
-  return (tx.payin_details as PayinDetails | null) ?? null;
+  const payin = (tx.payin_details as PayinDetails | null) ?? null;
+  // The checkout key and mode are config, not facts about the payment. Read them
+  // fresh, so a key rotated after the attempt started still opens Payaza's checkout.
+  if (payin?.kind === "checkout") {
+    return {
+      ...payin,
+      merchantKey: env.payazaPublicKey,
+      connectionMode: env.mode === "live" ? "Live" : "Test",
+    };
+  }
+  return payin;
 }
 
 /**
