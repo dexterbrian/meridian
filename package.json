@@ -26,6 +26,7 @@
     "@solidjs/start": "2.0.5",
     "@supabase/ssr": "0.12.7",
     "@supabase/supabase-js": "2.117.1",
+    "@vercel/analytics": "^2.0.1",
     "cookie-es": "3.1.1",
     "js-md5": "0.9.2",
     "lucide-solid": "1.47.0",

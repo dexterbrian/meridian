@@ -1,7 +1,8 @@
 import { Meta, MetaProvider, Title } from "@solidjs/meta";
 import { Router } from "@solidjs/router";
 import { FileRoutes } from "@solidjs/start/router";
-import { ErrorBoundary, Suspense, createEffect } from "solid-js";
+import { ErrorBoundary, Suspense, createEffect, onMount } from "solid-js";
+import { inject } from "@vercel/analytics";
 import { Toaster } from "~/components/ui/toast";
 import "./styles.css";
 
@@ -34,6 +35,10 @@ function ErrorPage(props: { error: unknown; reset: () => void }) {
 }
 
 export default function App() {
+  onMount(() => {
+    inject();
+  });
+
   return (
     <Router
       root={(props) => (
