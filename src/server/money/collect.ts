@@ -37,6 +37,7 @@ import {
   transactionHeldEmail,
 } from "../email/templates";
 import { env } from "../env";
+import type { PayinInstructions } from "../partners/adapters";
 import * as payaza from "../partners/payaza";
 import { supabaseAdmin } from "../supabase";
 
@@ -51,7 +52,7 @@ export type PaymentRequest = Tables<"payment_requests">;
 export type Business = Tables<"businesses">;
 export type PayoutAccount = Tables<"payout_accounts">;
 
-type EventSource = "system" | "payaza_webhook" | "admin" | "job";
+export type EventSource = "system" | "payaza_webhook" | "admin" | "job";
 
 /** What the payer needs to finish paying. Stored on transactions.payin_details. */
 export type PayinDetails =
@@ -88,7 +89,10 @@ export type PayinDetails =
       firstName: string;
       lastName: string;
       phone: string;
-    };
+    }
+  // Routed providers (Yellow Card, Kotani, Minisend ...): international bank
+  // transfer into a virtual account, USDC to an address, or a wallet prompt.
+  | PayinInstructions;
 
 export class CollectError extends Error {
   constructor(
@@ -98,6 +102,12 @@ export class CollectError extends Error {
     super(message);
   }
 }
+
+const ROUTED_METHOD_LABEL: Record<string, string> = {
+  virtual_account: "International bank transfer",
+  stablecoin: "USDC",
+  wallet: "Alipay / WeChat Pay",
+};
 
 /* --------------------------------- helpers -------------------------------- */
 
@@ -127,7 +137,7 @@ async function logEvent(input: {
 }
 
 /** Conditional status change. Returns the updated row or null when the state had already moved. */
-async function transition(
+export async function transition(
   tx: Tx,
   from: TransactionStatus | TransactionStatus[],
   to: TransactionStatus,
@@ -185,7 +195,7 @@ async function addFlags(tx: Tx, hits: CheckHit[], businessName: string) {
   }
 }
 
-async function loadTx(id: string): Promise<Tx | null> {
+export async function loadTx(id: string): Promise<Tx | null> {
   const { data } = await db().from("transactions").select().eq("id", id).maybeSingle();
   return data ?? null;
 }
@@ -213,7 +223,7 @@ async function loadRequest(id: string): Promise<PaymentRequest | null> {
   return data ?? null;
 }
 
-async function loadBusiness(id: string): Promise<Business | null> {
+export async function loadBusiness(id: string): Promise<Business | null> {
   const { data } = await db().from("businesses").select().eq("id", id).maybeSingle();
   return data ?? null;
 }
@@ -648,10 +658,14 @@ export type AttemptView = {
   payin: PayinDetails | null;
   failureReason: string | null;
   totalCharged: number;
-  currency: Currency;
-  method: PayMethod;
+  /** The payer's currency. A routed payment may be EUR, GBP or USD, not a Payaza currency. */
+  currency: Currency | (string & {});
+  method: PayMethod | "virtual_account" | "stablecoin" | "wallet";
   sandbox: boolean;
   payoutSimulated: boolean;
+  /** Set for a routed payment: the provider carrying it, and those tried before it. */
+  provider: string | null;
+  attempts: { provider: string; ok: boolean; error?: string }[];
 };
 
 const STATUS_CHECK_AFTER_MS = 15_000;
@@ -686,10 +700,14 @@ export async function attemptView(transactionId: string): Promise<AttemptView | 
     payin: payinOf(tx),
     failureReason: tx.failure_reason,
     totalCharged: Number(tx.total_charged),
-    currency: tx.send_currency as Currency,
-    method: tx.pay_method as PayMethod,
+    currency: tx.send_currency,
+    method: tx.pay_method as AttemptView["method"],
     sandbox: env.mode === "sandbox",
     payoutSimulated: quote["payoutSimulated"] === true,
+    provider: tx.partner_in && tx.partner_in !== "payaza" ? tx.partner_in : null,
+    attempts: Array.isArray(quote["attempts"])
+      ? (quote["attempts"] as AttemptView["attempts"])
+      : [],
   };
 }
 
@@ -854,6 +872,8 @@ export async function handleCollectionOutcome(input: {
 /** Ask Payaza what happened and, if it has an answer, run the same path as a webhook. */
 export async function reconcileCollection(tx: Tx, source: EventSource): Promise<void> {
   if (tx.status !== "awaiting_payin") return;
+  // Routed providers report through their own webhooks; Payaza knows nothing of these.
+  if (tx.partner_in && tx.partner_in !== "payaza") return;
   const state = await payaza.collectionState({
     reference: tx.reference,
     method: tx.pay_method as PayMethod,
@@ -1047,7 +1067,7 @@ async function executePayout(tx: Tx, source: EventSource): Promise<void> {
 }
 
 /** Step 6 of TRD 6.2. Transfer confirmed. Receipts to both sides, request marked paid. */
-async function settle(
+export async function settle(
   tx: Tx,
   facts: { fee?: number | null; simulated?: boolean },
   source: EventSource,
@@ -1071,17 +1091,21 @@ async function settle(
   const business = await loadBusiness(settled.business_id);
   const request = settled.payment_request_id ? await loadRequest(settled.payment_request_id) : null;
   const account = await loadPayoutAccount(settled.payout_account_id);
-  const cur = settled.send_currency as Currency;
+  const cur = settled.send_currency;
   const factsForEmail = {
     businessName: business?.trading_name || business?.name || "",
     reference: request?.reference ?? settled.reference.slice(0, 12),
     attemptReference: settled.reference,
     invoiceNumber: request?.invoice_number ?? null,
     memo: request?.memo ?? null,
-    amount: formatMoney(Number(settled.send_amount), cur),
+    // What the business gets, in its currency. A routed payer may have paid in another currency.
+    amount: formatMoney(Number(settled.receive_amount), settled.receive_currency),
     totalCharged: formatMoney(Number(settled.total_charged), cur),
     totalFees: formatMoney(Number(settled.partner_fee_in) + Number(settled.meridian_fee), cur),
-    method: METHOD_LABEL[settled.pay_method as PayMethod],
+    method:
+      METHOD_LABEL[settled.pay_method as PayMethod] ??
+      ROUTED_METHOD_LABEL[settled.pay_method] ??
+      settled.pay_method,
     payerName: settled.payer_name,
     payerEmail: settled.payer_email,
     settledAt: new Date(settled.settled_at ?? Date.now()).toUTCString(),

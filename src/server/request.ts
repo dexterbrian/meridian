@@ -34,6 +34,8 @@ const limiters = {
   signIn: createRateLimiter(10, TEN_MINUTES),
   pay: createRateLimiter(20, TEN_MINUTES),
   business: createRateLimiter(60, TEN_MINUTES),
+  // Price checks call every provider, so they are capped too, but loosely: payers compare.
+  quote: createRateLimiter(60, TEN_MINUTES),
 };
 
 export function allowRequest(bucket: keyof typeof limiters): boolean {

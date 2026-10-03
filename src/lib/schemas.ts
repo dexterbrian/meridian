@@ -170,3 +170,92 @@ export const adminTransactionActionSchema = z.object({
   action: z.enum(["release", "reject", "retry_payout", "mark_refunded"]),
   note: optionalText(1000),
 });
+
+/* ------------------------- routed payments (providers) --------------------- */
+
+const isoCurrency = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z]{3}$/, "Pick a currency");
+const rail = z.enum(["momo", "bank", "card", "virtual_account", "stablecoin", "wallet"]);
+
+/** A payer paying a request in another currency, through a routed provider. */
+export const routedPaySchema = z.object({
+  reference: referenceSchema,
+  currency: isoCurrency,
+  rail,
+  payer_name: text(200).min(2, "Enter your name"),
+  payer_email: z.email("Enter a valid email").max(254),
+  payer_phone: optionalText(32),
+  payer_country: iso2,
+});
+export type RoutedPayInput = z.input<typeof routedPaySchema>;
+
+/** A supplier a business pays. Bank recipients abroad need a SWIFT code or IBAN. */
+export const recipientSchema = z
+  .object({
+    name: text(200).min(2, "Enter the recipient's name"),
+    country: iso2,
+    currency: isoCurrency,
+    method: z.enum(["momo", "bank", "wallet"]),
+    account_number: text(64).min(4, "Enter the account, IBAN, phone or wallet ID"),
+    bank_name: optionalText(120),
+    bank_code: optionalText(32),
+    network: optionalText(32),
+    swift_code: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^([A-Z0-9]{8}|[A-Z0-9]{11})?$/, "A SWIFT code is 8 or 11 letters and numbers")
+      .optional()
+      .default(""),
+    iban: optionalText(42),
+    address: optionalText(300),
+    email: z
+      .union([z.email("Enter a valid email").max(254), z.literal("")])
+      .optional()
+      .default(""),
+  })
+  .refine((r) => r.method !== "momo" || /^\+?\d{9,15}$/.test(r.account_number.replace(/\s/g, "")), {
+    message: "Enter the mobile money number with the country code",
+    path: ["account_number"],
+  })
+  .refine(
+    (r) =>
+      r.method !== "bank" ||
+      AFRICA_LOCAL.includes(r.country) ||
+      r.swift_code !== "" ||
+      r.iban !== "",
+    { message: "Add the bank's SWIFT code (or an IBAN) for a bank abroad", path: ["swift_code"] },
+  );
+export type RecipientInput = z.input<typeof recipientSchema>;
+
+/** Countries where a local bank code is enough; elsewhere a SWIFT code or IBAN is needed. */
+const AFRICA_LOCAL = [
+  "KE",
+  "NG",
+  "GH",
+  "ZA",
+  "UG",
+  "TZ",
+  "ZM",
+  "RW",
+  "CM",
+  "CI",
+  "SN",
+  "BJ",
+  "ET",
+  "CD",
+  "SL",
+  "LR",
+];
+
+export const transferSchema = z.object({
+  recipient_id: z.uuid("Pick a recipient"),
+  from_currency: isoCurrency,
+  from_rail: rail,
+  amount: z.number("Enter an amount").positive("Enter an amount").max(1_000_000_000),
+  idempotency_key: z.string().regex(/^[0-9a-f]{16,64}$/),
+});
+export type TransferInput = z.input<typeof transferSchema>;
