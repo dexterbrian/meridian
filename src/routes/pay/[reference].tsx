@@ -13,6 +13,7 @@ import ShieldCheck from "lucide-solid/icons/shield-check";
 import { Match, Show, Suspense, Switch, createEffect, createSignal, onCleanup } from "solid-js";
 
 import { FeeBreakdown, FeeSummary, WhyFeesCard } from "~/components/fee-breakdown";
+import { OtherCurrencyPay } from "~/components/other-currency-pay";
 import {
   CheckoutLauncher,
   MethodChoice,
@@ -21,6 +22,7 @@ import {
   VirtualAccountBox,
 } from "~/components/pay-flow";
 import { INPUT_CLASS, PayMethodPicker, payButtonLabel } from "~/components/pay-methods";
+import { FallbackNote, RoutedPayinBox } from "~/components/routing";
 import { DemoBanner } from "~/components/site/banner";
 import { SiteFooter } from "~/components/site/footer";
 import { DemoHeader } from "~/components/site/wordmark";
@@ -29,8 +31,10 @@ import { BUTTON_PRIMARY, BUTTON_SECONDARY, Notice } from "~/components/ui/field"
 import { toast } from "~/components/ui/toast";
 import { formatMoney, methodsFor, quoteCollection, type PayMethod } from "~/lib/fees";
 import { networksFor } from "~/lib/payaza-codes";
+import { provider as providerProfile, type ProviderId } from "~/lib/providers";
 import { isTerminal } from "~/lib/status";
 import type { AttemptView } from "~/server/money/collect";
+import type { PayinInstructions } from "~/server/partners/adapters";
 import {
   getPublicRequest,
   pollAttempt,
@@ -116,6 +120,8 @@ function RealPay(props: { request: PublicRequest }) {
   );
   const [busy, setBusy] = createSignal(false);
   const [showBreakdown, setShowBreakdown] = createSignal(false);
+  // Paying in another currency, through a routed provider.
+  const [other, setOther] = createSignal(false);
   const [attemptId, setAttemptId] = createSignal<string | null>(
     search.attempt ??
       (typeof sessionStorage !== "undefined" ? sessionStorage.getItem(storageKey()) : null),
@@ -203,7 +209,11 @@ function RealPay(props: { request: PublicRequest }) {
     try {
       const r = await sandboxApprove(id);
       if (!r.ok) return toast.error(r.error);
-      toast.success("Sandbox: payer approved. Waiting for Payaza's confirmation…");
+      toast.success(
+        attempt()?.provider
+          ? "Sandbox: the payer's money reached the provider."
+          : "Sandbox: payer approved. Waiting for Payaza's confirmation…",
+      );
       await revalidate(loadAttempt.keyFor(id));
     } finally {
       setBusy(false);
@@ -213,6 +223,7 @@ function RealPay(props: { request: PublicRequest }) {
   function tryAgain() {
     rememberAttempt(null);
     setMethod(null);
+    setOther(false);
     void revalidate(loadRequest.keyFor(params.reference));
   }
 
@@ -263,74 +274,114 @@ function RealPay(props: { request: PublicRequest }) {
         </Match>
         <Match when={true}>
           <div class="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-            <form onSubmit={pay} class="panel space-y-6 p-6">
-              <div>
-                <p class="text-xs uppercase tracking-widest text-muted-foreground">
-                  Payment request from
-                </p>
-                <p class="mt-1 text-lg font-semibold">{props.request.businessName}</p>
-                <h1 class="mt-3 font-display text-3xl font-bold">
-                  {formatMoney(amount(), props.request.currency)}
-                </h1>
-                <p class="mt-2 text-sm text-muted-foreground">
-                  <Show when={props.request.invoiceNumber}>
-                    Invoice {props.request.invoiceNumber} ·{" "}
-                  </Show>
-                  <span class="font-mono text-primary">{props.request.reference}</span>
-                </p>
-                <Show when={props.request.memo}>
-                  <p class="mt-1 text-sm">{props.request.memo}</p>
-                </Show>
-              </div>
-
-              <Show when={!props.request.hasPayoutAccount}>
-                <Notice tone="warning">
-                  {props.request.businessName} has not finished setting up. Please try again later.
-                </Notice>
-              </Show>
-
-              <FeeSummary
-                quote={quote()}
-                currencyCode={props.request.currency}
-                note={method() ? undefined : "Pick a payment method to see the fees."}
-                open={showBreakdown()}
-                onToggle={() => setShowBreakdown((o) => !o)}
-                breakdownId="fee-breakdown"
-              />
-
-              <MethodChoice
-                currency={props.request.currency}
-                available={available()}
-                method={method()}
-                onChange={setMethod}
-              />
-
-              <Show when={method()}>
-                {(m) => (
-                  <PayerFields
-                    currency={props.request.currency}
-                    method={m()}
-                    network={network()}
-                    onNetwork={setNetwork}
-                    country={country()}
-                    onCountry={setCountry}
+            <Show
+              when={!other()}
+              fallback={
+                <div class="panel space-y-6 p-6">
+                  <div>
+                    <p class="text-xs uppercase tracking-widest text-muted-foreground">
+                      Payment request from
+                    </p>
+                    <p class="mt-1 text-lg font-semibold">{props.request.businessName}</p>
+                    <h1 class="mt-3 font-display text-3xl font-bold">
+                      {formatMoney(amount(), props.request.currency)}
+                    </h1>
+                    <p class="mt-2 font-mono text-sm text-primary">{props.request.reference}</p>
+                  </div>
+                  <OtherCurrencyPay
+                    reference={params.reference}
+                    businessName={props.request.businessName}
+                    amount={formatMoney(amount(), props.request.currency)}
+                    disabled={!props.request.hasPayoutAccount}
+                    onStarted={(id) => rememberAttempt(id)}
                   />
-                )}
-              </Show>
+                  <button
+                    type="button"
+                    onClick={() => setOther(false)}
+                    class="text-xs text-muted-foreground underline hover:text-foreground"
+                  >
+                    Pay in {props.request.currency} instead
+                  </button>
+                </div>
+              }
+            >
+              <form onSubmit={pay} class="panel space-y-6 p-6">
+                <div>
+                  <p class="text-xs uppercase tracking-widest text-muted-foreground">
+                    Payment request from
+                  </p>
+                  <p class="mt-1 text-lg font-semibold">{props.request.businessName}</p>
+                  <h1 class="mt-3 font-display text-3xl font-bold">
+                    {formatMoney(amount(), props.request.currency)}
+                  </h1>
+                  <p class="mt-2 text-sm text-muted-foreground">
+                    <Show when={props.request.invoiceNumber}>
+                      Invoice {props.request.invoiceNumber} ·{" "}
+                    </Show>
+                    <span class="font-mono text-primary">{props.request.reference}</span>
+                  </p>
+                  <Show when={props.request.memo}>
+                    <p class="mt-1 text-sm">{props.request.memo}</p>
+                  </Show>
+                </div>
 
-              <button
-                type="submit"
-                disabled={busy() || !method() || !props.request.hasPayoutAccount}
-                class={`${BUTTON_PRIMARY} w-full py-3`}
-              >
-                {busy() ? "Starting…" : method() ? `Pay ${total()}` : "Choose a payment method"}
-              </button>
-              <p class="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                <ShieldCheck class="h-3.5 w-3.5" /> Processed by Payaza.{" "}
-                {props.request.businessName} receives the full{" "}
-                {formatMoney(amount(), props.request.currency)}.
-              </p>
-            </form>
+                <Show when={!props.request.hasPayoutAccount}>
+                  <Notice tone="warning">
+                    {props.request.businessName} has not finished setting up. Please try again
+                    later.
+                  </Notice>
+                </Show>
+
+                <FeeSummary
+                  quote={quote()}
+                  currencyCode={props.request.currency}
+                  note={method() ? undefined : "Pick a payment method to see the fees."}
+                  open={showBreakdown()}
+                  onToggle={() => setShowBreakdown((o) => !o)}
+                  breakdownId="fee-breakdown"
+                />
+
+                <MethodChoice
+                  currency={props.request.currency}
+                  available={available()}
+                  method={method()}
+                  onChange={setMethod}
+                />
+
+                <Show when={method()}>
+                  {(m) => (
+                    <PayerFields
+                      currency={props.request.currency}
+                      method={m()}
+                      network={network()}
+                      onNetwork={setNetwork}
+                      country={country()}
+                      onCountry={setCountry}
+                    />
+                  )}
+                </Show>
+
+                <button
+                  type="submit"
+                  disabled={busy() || !method() || !props.request.hasPayoutAccount}
+                  class={`${BUTTON_PRIMARY} w-full py-3`}
+                >
+                  {busy() ? "Starting…" : method() ? `Pay ${total()}` : "Choose a payment method"}
+                </button>
+                <p class="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <ShieldCheck class="h-3.5 w-3.5" /> Processed by Payaza.{" "}
+                  {props.request.businessName} receives the full{" "}
+                  {formatMoney(amount(), props.request.currency)}.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setOther(true)}
+                  class="mx-auto block text-sm font-semibold text-primary underline-offset-4 hover:underline"
+                >
+                  Paying from abroad or in another currency?
+                </button>
+              </form>
+            </Show>
 
             <div class="space-y-4">
               <Show when={showBreakdown()}>
@@ -362,6 +413,12 @@ function AttemptPanel(props: {
   const a = () => props.attempt;
   const total = () => formatMoney(a().totalCharged, a().currency);
   const amount = () => formatMoney(props.request.amount ?? 0, props.request.currency);
+  const providerName = () =>
+    a().provider ? providerProfile(a().provider as ProviderId).name : null;
+  const routedPayin = () => {
+    const k = a().payin?.kind;
+    return k === "bank_transfer" || k === "stablecoin" || k === "momo_prompt";
+  };
   return (
     <div class="mx-auto max-w-2xl space-y-6">
       <div class="panel p-6">
@@ -384,6 +441,12 @@ function AttemptPanel(props: {
         </div>
       </div>
 
+      <FallbackNote
+        attempts={a().attempts.map((x) => ({
+          ...x,
+          providerName: providerProfile(x.provider as ProviderId).name,
+        }))}
+      />
       <Switch>
         <Match when={a().status === "awaiting_payin" && a().payin?.kind === "momo"}>
           <MomoWait
@@ -403,6 +466,9 @@ function AttemptPanel(props: {
             payin={a().payin as Extract<AttemptView["payin"], { kind: "checkout" }>}
             onHint={() => void revalidate(loadAttempt.keyFor(a().id))}
           />
+        </Match>
+        <Match when={a().status === "awaiting_payin" && routedPayin()}>
+          <RoutedPayinBox payin={a().payin as PayinInstructions} providerName={providerName()} />
         </Match>
         <Match when={a().status === "collected" || a().status === "paying_out"}>
           <Notice tone="info">
@@ -459,7 +525,9 @@ function AttemptPanel(props: {
       <Show when={a().sandbox && a().status === "awaiting_payin" && a().payin?.kind !== "checkout"}>
         <div class="rounded-xl border border-dashed border-accent/60 p-4 text-center text-sm">
           <p class="text-muted-foreground">
-            Sandbox: nobody's phone will ring. Press this to play the payer approving.
+            {routedPayin()
+              ? "Sandbox: no real account. Press this to play your money arriving."
+              : "Sandbox: nobody's phone will ring. Press this to play the payer approving."}
           </p>
           <button
             type="button"
@@ -467,7 +535,11 @@ function AttemptPanel(props: {
             disabled={props.busy}
             class={`${BUTTON_SECONDARY} mt-3`}
           >
-            {props.busy ? "Approving…" : "Simulate approval on the phone"}
+            {props.busy
+              ? "Approving…"
+              : routedPayin()
+                ? "Simulate the payment arriving"
+                : "Simulate approval on the phone"}
           </button>
         </div>
       </Show>
@@ -490,8 +562,8 @@ function AttemptPanel(props: {
         </p>
       </Show>
       <p class="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        <ShieldCheck class="h-3.5 w-3.5" /> Processed by Payaza. Confirmed by Meridian before
-        anything moves.
+        <ShieldCheck class="h-3.5 w-3.5" /> Processed by {providerName() ?? "Payaza"}. Confirmed by
+        Meridian before anything moves.
       </p>
     </div>
   );
