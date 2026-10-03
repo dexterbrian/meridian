@@ -94,4 +94,11 @@ describe("formatMoney", () => {
     expect(formatMoney(1500000, "NGN")).toBe("₦1,500,000");
     expect(formatMoney(1500, "KES")).toBe("KES 1,500.00");
   });
+
+  it("formats currencies only routed providers carry, not as KES", () => {
+    expect(formatMoney(1234.5, "EUR")).toBe("€1,234.50");
+    expect(formatMoney(150000, "JPY")).toBe("¥150,000");
+    expect(formatMoney(8000, "CNY")).toBe("CN¥8,000.00");
+    expect(formatMoney(10, "INR")).toBe("INR 10.00");
+  });
 });

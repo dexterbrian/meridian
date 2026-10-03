@@ -101,11 +101,17 @@ export function decimalsFor(code: Currency) {
   return currency(code).perUsd > 500 ? 0 : 2;
 }
 
-export function formatMoney(amount: number, code: Currency) {
-  const c = currency(code);
-  const decimals = decimalsFor(code);
+/** Symbols for currencies Meridian routes through other providers but Payaza doesn't handle. */
+const ROUTED_SYMBOL: Record<string, string> = { EUR: "€", GBP: "£", JPY: "¥", CNY: "CN¥" };
+/** Routed currencies moved in whole units. */
+const WHOLE_UNITS = new Set(["JPY", "IDR", "LKR", "RWF", "MWK"]);
+
+export function formatMoney(amount: number, code: Currency | (string & {})) {
+  const known = isCurrency(code) ? currency(code) : null;
+  const symbol = known?.symbol ?? ROUTED_SYMBOL[code] ?? code;
+  const decimals = known ? decimalsFor(known.code) : WHOLE_UNITS.has(code) ? 0 : 2;
   // A currency code used as the symbol (KES) needs a space: "KES 1,500.00".
-  const prefix = /^[A-Z]{3}$/.test(c.symbol) ? `${c.symbol} ` : c.symbol;
+  const prefix = /^[A-Z]{3}$/.test(symbol) ? `${symbol} ` : symbol;
   return `${prefix}${amount.toLocaleString("en-US", {
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
