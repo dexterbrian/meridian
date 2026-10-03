@@ -138,6 +138,25 @@ isOneToOne: false
       referencedColumns: ["id"]
     }
                   ]
+                },"recipients": {
+                  Row: {
+                    "business_id": string,"country": string,"created_at": string,"currency": string,"details": NonNullable<Json>,"first_paid_at": string | null,"id": string,"method": string,"name": string,"partner_refs": NonNullable<Json>,"screened_at": string | null,"screening_result": Json | null,"updated_at": string
+                  }
+                  Insert: {
+                    "business_id": string,"country": string,"created_at"?: string,"currency": string,"details"?: NonNullable<Json>,"first_paid_at"?: string | null,"id"?: string,"method": string,"name": string,"partner_refs"?: NonNullable<Json>,"screened_at"?: string | null,"screening_result"?: Json | null,"updated_at"?: string
+                  }
+                  Update: {
+                    "business_id"?: string,"country"?: string,"created_at"?: string,"currency"?: string,"details"?: NonNullable<Json>,"first_paid_at"?: string | null,"id"?: string,"method"?: string,"name"?: string,"partner_refs"?: NonNullable<Json>,"screened_at"?: string | null,"screening_result"?: Json | null,"updated_at"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "recipients_business_id_fkey"
+      columns: ["business_id"]
+isOneToOne: false
+      referencedRelation: "businesses"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"transaction_events": {
                   Row: {
                     "created_at": string,"from_status": string | null,"id": string,"idempotency_key": string,"payload": Json | null,"source": string,"to_status": string | null,"transaction_id": string
@@ -185,6 +204,12 @@ isOneToOne: false
       columns: ["payout_account_id"]
 isOneToOne: false
       referencedRelation: "payout_accounts"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "transactions_recipient_id_fkey"
+      columns: ["recipient_id"]
+isOneToOne: false
+      referencedRelation: "recipients"
       referencedColumns: ["id"]
     }
                   ]
@@ -264,6 +289,53 @@ isOneToOne: false
       } },
 "start_collection_attempt":
 { Args: { "p_amount": number,"p_meridian_fee": number,"p_partner_fee": number,"p_pay_method": string,"p_payer": Json,"p_payout_account_id": string,"p_quote": Json,"p_reference": string,"p_total_charged": number,"p_usd_equivalent": number }; Returns: {
+              "attempt_no": number | null,
+"business_id": string,
+"collected_at": string | null,
+"created_at": string,
+"failure_reason": string | null,
+"id": string,
+"idempotency_key": string | null,
+"kind": string,
+"meridian_fee": number,
+"partner_fee_in": number,
+"partner_fee_out": number,
+"partner_fee_reported": number | null,
+"partner_in": string | null,
+"partner_in_ref": string | null,
+"partner_out": string | null,
+"partner_out_ref": string | null,
+"pay_method": string,
+"payer_country": string | null,
+"payer_email": string | null,
+"payer_name": string | null,
+"payer_phone": string | null,
+"payin_details": Json | null,
+"payment_request_id": string | null,
+"payout_account_id": string | null,
+"payout_reference": string | null,
+"quote": NonNullable<Json>,
+"quote_expires_at": string | null,
+"receive_amount": number,
+"receive_currency": string,
+"recipient_id": string | null,
+"reference": string,
+"send_amount": number,
+"send_currency": string,
+"settled_at": string | null,
+"status": string,
+"total_charged": number,
+"updated_at": string,
+"usd_equivalent": number
+            }
+                          SetofOptions: {
+        from: "*"
+        to: "transactions"
+        isOneToOne: true
+        isSetofReturn: false
+      } },
+"start_routed_attempt":
+{ Args: { "p_meridian_fee": number,"p_partner": string,"p_partner_fee": number,"p_pay_method": string,"p_payer": Json,"p_payout_account_id": string,"p_quote": Json,"p_receive_amount": number,"p_reference": string,"p_send_amount": number,"p_send_currency": string,"p_total_charged": number,"p_usd_equivalent": number }; Returns: {
               "attempt_no": number | null,
 "business_id": string,
 "collected_at": string | null,
@@ -438,4 +510,3 @@ export const Constants = {
           }
         }
 } as const
-
