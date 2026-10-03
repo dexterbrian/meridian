@@ -44,3 +44,8 @@ supabase/.branches
 
 .vercel
 .env*
+
+# Playwright
+test-results/
+playwright-report/
+e2e/.auth/
