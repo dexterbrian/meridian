@@ -67,4 +67,77 @@ export const env = {
   get payazaSimulatePayouts() {
     return this.mode === "sandbox" && read("PAYAZA_SIMULATE_PAYOUTS") === "true";
   },
+
+  // Routed providers (src/lib/providers.ts). A provider without its keys gives
+  // sandbox estimates and simulated execution in sandbox mode, and is skipped in live.
+  get kotani() {
+    const apiKey = read("KOTANI_API_KEY");
+    return apiKey
+      ? {
+          apiKey,
+          baseUrl: (read("KOTANI_BASE_URL") ?? "https://sandbox-api.kotanipay.io/api/v3").replace(
+            /\/+$/,
+            "",
+          ),
+        }
+      : null;
+  },
+  get yellowcard() {
+    const apiKey = read("YELLOWCARD_API_KEY");
+    const secret = read("YELLOWCARD_SECRET");
+    return apiKey && secret
+      ? {
+          apiKey,
+          secret,
+          baseUrl: (read("YELLOWCARD_BASE_URL") ?? "https://sandbox.api.yellowcard.io").replace(
+            /\/+$/,
+            "",
+          ),
+          businessId: read("YELLOWCARD_BUSINESS_ID") ?? "",
+        }
+      : null;
+  },
+  get klasha() {
+    const username = read("KLASHA_USERNAME");
+    const password = read("KLASHA_PASSWORD");
+    const publicKey = read("KLASHA_PUBLIC_KEY");
+    const encryptionKey = read("KLASHA_ENCRYPTION_KEY");
+    return username && password && publicKey && encryptionKey
+      ? {
+          username,
+          password,
+          publicKey,
+          encryptionKey,
+          baseUrl: (read("KLASHA_BASE_URL") ?? "https://dev.kcp-api.klasha.com").replace(
+            /\/+$/,
+            "",
+          ),
+        }
+      : null;
+  },
+  get minisend() {
+    const apiKey = read("MINISEND_API_KEY");
+    return apiKey
+      ? {
+          apiKey,
+          baseUrl: (read("MINISEND_BASE_URL") ?? "https://merchant.minisend.xyz").replace(
+            /\/+$/,
+            "",
+          ),
+          /** EVM address Meridian controls, for refunds of stray USDC. Required by offramp orders. */
+          refundAddress: read("MINISEND_REFUND_ADDRESS") ?? "",
+        }
+      : null;
+  },
+  /**
+   * Sandbox only: providers whose simulated execution should fail, comma separated
+   * (e.g. "yellowcard"). Lets tests and demos show a fallback. Ignored in live mode.
+   */
+  get simulateFailures(): string[] {
+    if (this.mode !== "sandbox") return [];
+    return (read("PARTNER_SIMULATE_FAIL") ?? "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  },
 };
