@@ -498,18 +498,31 @@ scripts/
 | Collect | USD (any country) | Card, Apple Pay, Google Pay via Web Checkout |
 | Payout | The business's payout currency (KES, UGX, TZS, NGN, GHS, ZAR, ZMW, XAF, LRD, CDF), mobile money or bank | Transfers, after account name enquiry |
 
-**Full MVP:**
+**Multi-provider routing (built 3 October 2026, branch `feat/multi-partner-routing`).** Payaza, Kotani Pay, Yellow Card, Klasha and Minisend. What each can collect, pay out and convert lives in `src/lib/providers.ts`, from their docs (checked 1–3 October 2026). Each entry is marked *documented* (the docs state it) or *assumed* (implied, to confirm with the provider).
 
-| Leg | Currency / country | Partner | Endpoint family |
-|---|---|---|---|
-| Collect | KES, NGN, GHS, ZAR, UGX, TZS | Kotani | `deposit/mobile-money`, `deposit/bank-checkout`, `deposit/card` |
-| Collect | EUR | Kotani | `deposit/card`, `deposit/bank-checkout` (confirm) |
-| Payout | KES, GHS, UGX, TZS, NGN momo | Kotani | `withdraw/mobile-money` |
-| Payout | KES, ZAR bank | Kotani | `cross-boarder/invoice` (KES bank) / `withdraw/bank` (ZAR) |
-| Payout | NGN, GHS, TZS bank | Klasha | Payout API per currency |
-| Payout | EUR | Kotani (confirm) else Klasha Wire | |
-| Payout | CNY | Klasha | `quotation/v2` → `bank/transfer/v2/request` |
-| Payout | USD, JPY, GBP, AED, HKD, INR | Klasha Wire | `merchantbeneficiary/create` → `wire/generate/quote` → `wire/initiate` |
+How a payment is routed, in order:
+
+1. **Candidates.** Every provider that can collect the payer's currency on the payer's rail, pay the recipient's currency on the recipient's rail, and convert between them if they differ. One provider per payment: mixing two would need a float with each (PRD 5.6).
+2. **Quotes.** All candidates are asked at once (`src/server/money/router.ts`, 8 second timeout each). A provider with keys gives a live quote; without keys, in sandbox, an estimate from its published fees, labelled "Estimate". A provider that errors or times out is listed as unavailable.
+3. **Rank.** The recipient's amount is fixed, so the cheapest is the one that needs the least from the payer. That one number folds in fees, FX spread and fixed charges. Ties go to a documented route, then registry order.
+4. **Price.** The payer pays the provider's price plus Meridian's 1% of it (`priceRoute`). Same rule as Payaza collections: amount + provider cost + Meridian fee = total.
+5. **Open with fallback.** The cheapest provider is asked for the payer's instructions (an account to pay into, a USDC address, a wallet prompt). If it is down or refuses, the next cheapest is asked, and so on. Safe, because no money has moved. The tried providers are kept on the transaction and shown to the payer.
+6. **Payout.** Once the payer's money reaches the provider, the same provider pays the recipient. If that payout fails, the money is with that provider, so the payment is marked failed for an admin. It is never re-sent through another provider, which could pay twice.
+
+Example. A Kenyan exporter is owed KES 129,000. The buyer in Germany pays in USDC. Candidates: Minisend and Kotani. Estimates: Minisend asks 1,015.18 USDC, Kotani 1,063.26. Minisend is used and Kotani is the backup. The buyer pays 1,025.33 USDC (Minisend's price plus 1%). The exporter's M-Pesa gets exactly KES 129,000.
+
+Who covers what (summary; the registry has the full lists):
+
+| Need | Providers | Notes |
+|---|---|---|
+| Africa to Africa, local currency | Kotani, Yellow Card, Minisend, Klasha (payout), Payaza (same currency only) | Cheapest wins per corridor, e.g. GHS momo → KES M-Pesa: Yellow Card, Kotani, Minisend |
+| Payer abroad, USD / EUR / GBP | Yellow Card virtual accounts (ACH, wire, SWIFT, SEPA, Faster Payments) | EUR and GBP have one provider today |
+| Payer abroad, USDC | Minisend, Kotani | Into KES, NGN, GHS, UGX |
+| Payer in Japan or China | None collects JPY or CNY | Pay in USD by bank transfer, or USDC |
+| Pay a supplier in China (CNY, bank or Alipay / WeChat) | Klasha | Klasha is not China-only: it also pays JPY, EUR, GBP, USD, HKD, INR, AED, AUD, CAD, CHF, TRY |
+| Pay a supplier in Japan (JPY) | Klasha | |
+| Pay a supplier in the EU / US | Yellow Card (assumed), Klasha | |
+| Pay a supplier in India, Indonesia, Philippines, Sri Lanka, Thailand, Cambodia | Yellow Card | Klasha also pays INR |
 
 ### 4.2 Payaza (hackathon build)
 
@@ -548,6 +561,23 @@ scripts/
 - Wire: create beneficiary once per recipient, store token. Quote → initiate. Quote expires when their rate changes, so quote immediately before pay-in confirmation and re-quote if `QuoteNotFoundException`.
 - Webhooks: `{event: "payout", data: {reference, status}}`. No signature documented. Mitigate: treat webhook as a hint, then call their status endpoint to confirm before changing state.
 - Source of funds: Klasha payouts debit Klasha wallet balances. Meridian must pre-fund the Klasha USD wallet (via Kotani → Klasha swap or bank). **Operational task, not code.** Phase 4 exit criterion.
+
+### 4.4a Yellow Card
+
+- Auth: every request signed. `X-YC-Timestamp` (ISO time) and `Authorization: YcHmacV1 {key}:{signature}`, where the signature is base64 HMAC-SHA256 with the secret over timestamp + path (no query) + method + base64(SHA-256 of the body), the body part only for POST and PUT. Tested against Node's crypto.
+- Rates: `GET /business/rates` gives buy and sell per currency against USD. Two non-USD currencies convert through USD (sell, then buy). The channel fee is assumed at 1% until read per channel from `GET /business/channels`.
+- Payout: `GET /business/channels?country` → pick an active withdraw channel → `POST /business/payments` → `POST /business/payments/{id}/accept`.
+- Collect from abroad: `POST /business/sub-wallets` with `createVirtualAccount` opens a USD, EUR or GBP account for the payment.
+
+### 4.4b Minisend
+
+- Auth: `Authorization: Bearer {MINISEND_API_KEY}`. Base `https://merchant.minisend.xyz`.
+- Quote: `POST /api/offramp/quote` `{amount (USDC), currency}` → recipient amount, fee, rate, expiry.
+- Order: `POST /api/offramp/orders` with `Idempotency-Key` = our reference → deposit address. The payer's USDC goes there and Minisend pays the M-Pesa, bank or MoMo account. Needs `MINISEND_REFUND_ADDRESS` for stray deposits.
+
+### 4.4c Status of the provider code
+
+Built to each provider's docs (`src/server/partners/adapters.ts`, request bodies and parsers in `src/lib/partner-requests.ts`). **Not yet run against their sandboxes: no keys.** Without keys, sandbox mode uses estimates and simulated execution, labelled as such. Kotani's offramp create fields aren't in the docs we have, so live Kotani USDC collection is not wired. Webhooks for the four routed providers are still to build; until then a live payout stays "paying out" until an admin confirms.
 
 ### 4.5 Quote object (internal)
 
@@ -638,6 +668,10 @@ Nightly. Download OFAC SDN (CSV), UN consolidated (XML), EU (XML), UK HMT (CSV).
 Proven end to end against the sandbox by `npm run e2e:sandbox`: two clicks make two attempts, the paid event replayed is a duplicate, a late payment on a paid request is held, a third attempt is refused by the database.
 
 ### 6.3 Transfer
+
+**Built (routed, `/app/send`).** The business saves a recipient (country, currency, mobile money / bank / wallet, SWIFT or IBAN abroad), enters what the recipient should get, and picks how it pays (its local mobile money or bank, a USD/EUR/GBP account, or USDC). It sees every provider's price, cheapest first. On send, a transaction `MRDT-XXXXXXXX` is created and opened with fallback (4.1 step 5). When the business's money reaches the provider, the same provider pays the recipient. Compliance checks on transfers (limits, screening) are still to add.
+
+Original plan:
 
 1. Business picks recipient, enters amount. Server function gets quote (Kotani fiat or Klasha), builds `Quote`, runs rules, creates `transactions` row `quoted` (or `held`/`blocked`).
 2. Business confirms before `quote_expires_at`. Server function: status `awaiting_payin`, Kotani deposit STK to the business's phone or bank checkout redirect.
@@ -734,6 +768,10 @@ Must-have tests:
 - Klasha encrypt: matches a known ciphertext from their Postman collection (decrypt round-trip).
 - Quote builder: Kotani fiat response → `Quote`; Klasha CNY response → `Quote`.
 - Reference generator: no ambiguous chars.
+- Routing: candidates per corridor, ranking, fallback order, no JPY/CNY collection, payer price adds up. _Done (`routing.test.ts`)._
+- Provider requests: Yellow Card signature, quote parsers, payout bodies. _Done (`partner-requests.test.ts`)._
+
+Browser tests (Playwright, `npm run test:e2e`, local Supabase): a payer abroad pays a KES request in USDC through the cheapest provider; the only provider for a route being down; paying suppliers in China (CNY) and Japan (JPY); falling back to Klasha when Yellow Card, the cheapest for euros, is down. The test server runs with `PARTNER_SIMULATE_FAIL=yellowcard`.
 
 Manual test plan per phase in [phases.md](./phases.md).
 

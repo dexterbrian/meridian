@@ -115,6 +115,26 @@ Hard-coded partner fees (bank 1%, momo 2%, card 2.5%), Meridian 1%, and a 0.35% 
 | Pay out to China | Klasha | Alipay, UnionPay card, bank (B2B) | B2B bank needs invoice, customs docs. Klasha quote locks rate and fee. |
 | Pay out to Japan, HK, UAE, India, UK, US | Klasha Wire | Bank wire | JPY, HKD, AED, INR, GBP, USD. Quote valid until rate changes. |
 
+**Update, 3 October 2026: cheapest provider wins, the rest are backups.** Five providers are now wired: Payaza, Kotani Pay, Yellow Card, Klasha and Minisend. For every payment Meridian asks each provider that can carry it for a price and uses the cheapest. If that provider is down, the next cheapest takes over. Each payment stays with one provider from start to finish. What we found in their docs:
+
+- **Klasha is not China-only.** It pays CNY (bank, Alipay, WeChat Pay) and also JPY, EUR, GBP, USD, HKD, INR, AED and more. It is the only route found to Japan and China.
+- **Yellow Card** covers 20+ African countries both ways, and opens USD, EUR and GBP accounts for buyers abroad (wire, SEPA, Faster Payments). Its Asian payouts are India, Indonesia, the Philippines, Sri Lanka, Thailand and Cambodia. Not China or Japan.
+- **Kotani Pay** converts between African currencies with a fee on each side, and turns USDC into local money.
+- **Minisend** turns USDC into KES, NGN, GHS or UGX. Its published fee is about 1%.
+- **Nobody collects yen or yuan.** A buyer in Japan or China pays in USD or USDC.
+
+What this means for the customers:
+
+| Customer | Need | Route today |
+|---|---|---|
+| Chris (avocados) | Buyers in Europe and the Middle East pay USD 35–40k | Buyer pays USD or EUR into a Yellow Card account, or USDC via Minisend. Chris gets exact KES. |
+| Ann (flowers) | Buyers in Ghana, Nigeria, Namibia, Côte d'Ivoire | Buyer pays in GHS, NGN or XOF mobile money or bank. Cheapest of Yellow Card, Kotani, Minisend converts. Ann gets exact KES. Namibia (NAD) has no provider yet. |
+| McLoud | Pays suppliers in China | Klasha, CNY to bank or Alipay / WeChat Pay. |
+| Phillip | Pays car exporters in Japan | Klasha, JPY to bank. |
+| AfricaHackon | Customer in South Sudan | No provider lists South Sudan (SSP). The customer can pay in USD or USDC. |
+
+Live use needs each provider's keys and a sandbox run. Until then the sandbox shows estimates and simulated payments, labelled as such.
+
 **Launch order** (from interview demand): KES collections first. Payouts to CNY (McLoud), JPY (Phillip), USD (Richard), then NGN/GHS/UGX/TZS (Africa-Africa), then EUR (Chris).
 
 ### 5.3 Pricing and FX stance
