@@ -35,6 +35,7 @@ export const route = {
 const NAV = [
   { href: "/app", label: "Payments", end: true },
   { href: "/app/collect/new", label: "New request" },
+  { href: "/app/send", label: "Send money" },
   { href: "/app/settings/payout-accounts", label: "Payout accounts" },
   { href: "/app/onboarding", label: "Business profile" },
 ];
