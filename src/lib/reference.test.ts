@@ -6,8 +6,10 @@ import {
   attemptReference,
   isAttemptReference,
   isPayoutReference,
+  TRANSFER_REFERENCE_PATTERN,
   isReference,
   makeReference,
+  makeTransferReference,
   parseAttemptReference,
   payoutReference,
 } from "./reference";
@@ -83,5 +85,13 @@ describe("payoutReference", () => {
 
   it("refuses a request reference", () => {
     expect(() => payoutReference("MRD-VNN6FG3X")).toThrow();
+  });
+});
+
+describe("makeTransferReference", () => {
+  it("makes MRDT- references that are not request references", () => {
+    const r = makeTransferReference();
+    expect(r).toMatch(TRANSFER_REFERENCE_PATTERN);
+    expect(isReference(r)).toBe(false);
   });
 });

@@ -64,3 +64,10 @@ export function parseAttemptReference(
   const attemptNo = parseInt(value.slice(13), 36);
   return { requestReference, attemptNo };
 }
+
+/** A business-to-supplier transfer: MRDT-7K3PQ2XA. */
+export const TRANSFER_REFERENCE_PATTERN = /^MRDT-[ABCDEFGHJKLMNPQRSTUVWXYZ23456789]{8}$/;
+
+export function makeTransferReference(): string {
+  return `MRDT-${makeReference().slice(4)}`;
+}
