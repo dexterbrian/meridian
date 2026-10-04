@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   klashaBeneficiaryBody,
   klashaQuote,
+  kotaniOfframpBody,
   kotaniPayoutBody,
   kotaniQuote,
   minisendOrderBody,
@@ -62,6 +63,25 @@ describe("quote parsers", () => {
     })!;
     expect(q.receiveAmount).toBeCloseTo(1000 * 0.99 * (128 / 1530), 2);
     expect(q.cost).toBeGreaterThan(0);
+  });
+
+  it("Yellow Card: flat channel fees in USD are charged in the payer's currency", () => {
+    const q = yellowCardQuote({
+      rates: [
+        { code: "NGN", buy: 1500, sell: 1530 },
+        { code: "KES", buy: 128, sell: 130 },
+      ],
+      from: "NGN",
+      to: "KES",
+      amount: 12800,
+      side: "receive",
+      feePct: 0,
+      fixedFeeUsd: 0.5 + 1,
+      basis: "assumed",
+    })!;
+    // 12,800 KES is 100 USD at the buy rate, so 153,000 NGN, plus 1.5 USD of fees at the sell rate.
+    expect(q.sendAmount).toBeCloseTo(153_000 + 1.5 * 1530, 1);
+    expect(q.estimated).toBe(false);
   });
 
   it("Yellow Card: returns null for a currency it has no rate for", () => {
@@ -162,6 +182,24 @@ describe("payout bodies", () => {
     ).toBe("/withdraw/v2/bank");
   });
 
+  it("Kotani: USDC offramp on Base pays M-Pesa directly", () => {
+    expect(
+      kotaniOfframpBody({
+        r: momo,
+        usdc: 1015.18,
+        referenceId: "MRD-ABCDEFGH-1",
+        callbackUrl: "https://x/cb",
+      }),
+    ).toMatchObject({
+      cryptoAmount: 1015.18,
+      currency: "KES",
+      chain: "BASE",
+      token: "USDC",
+      referenceId: "MRD-ABCDEFGH-1",
+      mobileMoneyReceiver: { phoneNumber: "254712345678", networkProvider: "MPESA" },
+    });
+  });
+
   it("Yellow Card: destination carries account type, IBAN when given, and business sender", () => {
     const b = yellowCardPaymentBody({
       r: { ...bank, currency: "EUR", country: "FR", iban: "FR7630006000011234567890189" },
@@ -191,7 +229,7 @@ describe("payout bodies", () => {
     expect(minisendOrderBody(momo, 50, "0xabc", "MRDM-1")).toMatchObject({
       amount: 50,
       currency: "KES",
-      recipient: { method: "mobile_money", phone_number: "254712345678" },
+      recipient: { method: "MOBILE", phone: "254712345678", mobile_network: "Safaricom" },
     });
   });
 });

@@ -2,6 +2,7 @@ import "server-only";
 import {
   klashaBeneficiaryBody,
   klashaQuote,
+  kotaniOfframpBody,
   kotaniPayoutBody,
   kotaniQuote,
   minisendOrderBody,
@@ -203,12 +204,43 @@ const kotani: Adapter = {
     return { partnerRef: reference, simulated: false };
   },
   async collect(input) {
-    // Kotani's offramp (crypto to fiat) returns a deposit address; its request fields
-    // aren't in the docs we have, so live stablecoin collection waits on Kotani.
-    if (!env.kotani) return offline("kotani").collect(input);
-    throw new Error(
-      "Kotani stablecoin collection is not wired yet: confirm the offramp create fields with Kotani.",
-    );
+    const k = env.kotani;
+    if (!k) return offline("kotani").collect(input);
+    if (input.rail !== "stablecoin")
+      throw new Error("Kotani collection from a payer here is by USDC only.");
+    // Offramp: the payer's USDC goes to Kotani's escrow and Kotani pays the recipient.
+    const r = await partnerFetch<{
+      data?: { escrowAddress?: string; cryptoAmount?: number; referenceId?: string };
+      message?: string;
+    }>({
+      partner: "kotani",
+      method: "POST",
+      url: `${k.baseUrl}/offramp`,
+      headers: { Authorization: `Bearer ${k.apiKey}` },
+      body: JSON.stringify(
+        kotaniOfframpBody({
+          r: input.payoutTo,
+          usdc: input.quote.sendAmount,
+          referenceId: input.reference,
+          callbackUrl: `${env.appUrl}/api/webhooks/kotani`,
+        }),
+      ),
+      transactionId: input.transactionId,
+    });
+    const d = r.data?.data;
+    if (!r.ok || !d?.escrowAddress)
+      throw new Error(
+        `Kotani did not return a deposit address: ${r.data?.message ?? `HTTP ${r.status}`}`,
+      );
+    return {
+      kind: "stablecoin",
+      token: "USDC",
+      network: "Base",
+      address: d.escrowAddress,
+      amount: d.cryptoAmount ?? input.quote.sendAmount,
+      expiresAt: null,
+      simulated: false,
+    };
   },
 };
 
@@ -239,22 +271,72 @@ async function ycFetch<T>(
   });
 }
 
-const YC_FEE_PCT = 0.01; // channel fee assumed until GET /business/channels is read per channel
+/** For a leg with no channel to read a fee from (a virtual account deposit). Assumed. */
+const YC_FALLBACK_FEE_PCT = 0.01;
+
+type YcChannel = {
+  id: string;
+  country: string;
+  currency: string;
+  channelType: string;
+  rampType: "deposit" | "withdraw";
+  status: string;
+  feeUSD?: number;
+};
+
+let ycChannels: { list: YcChannel[]; until: number } | null = null;
+
+/** Yellow Card's channels, cached for ten minutes: fees and availability change rarely. */
+async function ycChannelList(): Promise<YcChannel[]> {
+  if (ycChannels && ycChannels.until > Date.now()) return ycChannels.list;
+  const r = await ycFetch<{ channels?: YcChannel[] }>("GET", "/business/channels");
+  const list = r.data?.channels ?? [];
+  if (list.length) ycChannels = { list, until: Date.now() + 10 * 60_000 };
+  return list;
+}
+
+function ycChannelFor(
+  list: YcChannel[],
+  e: { currency: string; rail: string; country?: string },
+  ramp: "deposit" | "withdraw",
+) {
+  const type = e.rail === "momo" ? "momo" : e.rail === "bank" ? "bank" : null;
+  if (!type) return null;
+  return (
+    list.find(
+      (c) =>
+        c.rampType === ramp &&
+        c.status === "active" &&
+        c.channelType === type &&
+        c.currency === e.currency &&
+        (!e.country || c.country === e.country),
+    ) ?? null
+  );
+}
 
 const yellowcard: Adapter = {
   id: "yellowcard",
   configured: () => env.yellowcard !== null,
   async quote(req, basis) {
     if (!env.yellowcard) return offline("yellowcard").quote(req, basis);
-    const r = await ycFetch<{ rates?: YellowCardRate[] }>("GET", "/business/rates");
+    const [r, channels] = await Promise.all([
+      ycFetch<{ rates?: YellowCardRate[] }>("GET", "/business/rates"),
+      ycChannelList(),
+    ]);
     if (!r.data?.rates) return null;
+    // Each leg costs its channel's flat fee. A USD/EUR/GBP account has no
+    // deposit channel listed, so that leg takes the assumed share instead.
+    const deposit = ycChannelFor(channels, req.from, "deposit");
+    const withdraw = ycChannelFor(channels, req.to, "withdraw");
+    if (!withdraw) return null; // No active way to pay this recipient right now.
     return yellowCardQuote({
       rates: r.data.rates,
       from: req.from.currency,
       to: req.to.currency,
       amount: req.amount,
       side: req.side,
-      feePct: YC_FEE_PCT,
+      feePct: deposit ? 0 : YC_FALLBACK_FEE_PCT,
+      fixedFeeUsd: (deposit?.feeUSD ?? 0) + (withdraw.feeUSD ?? 0),
       basis,
     });
   },

@@ -61,8 +61,10 @@ export function yellowCardQuote(input: {
   to: string;
   amount: number;
   side: "receive" | "send";
-  /** Channel fee as a share of the send amount. Yellow Card's channels list fees per channel. */
+  /** A fee as a share of the send amount, for a leg with no channel fee to read. */
   feePct: number;
+  /** Flat channel fees in USD (GET /business/channels feeUSD), deposit plus withdraw legs. */
+  fixedFeeUsd?: number;
   basis: Basis;
 }): RouteQuote | null {
   const r = (c: string) =>
@@ -71,14 +73,15 @@ export function yellowCardQuote(input: {
   const t = r(input.to);
   if (!f || !t || f.sell <= 0 || t.buy <= 0) return null;
   const rate = (1 / f.sell) * t.buy; // to-units per from-unit
+  const fixed = (input.fixedFeeUsd ?? 0) * f.sell; // flat fees, in the payer's currency
   let send: number;
   let receive: number;
   if (input.side === "receive") {
     receive = input.amount;
-    send = input.amount / rate / (1 - input.feePct);
+    send = (input.amount / rate + fixed) / (1 - input.feePct);
   } else {
     send = input.amount;
-    receive = input.amount * (1 - input.feePct) * rate;
+    receive = Math.max(0, (input.amount * (1 - input.feePct) - fixed) * rate);
   }
   return withCost({
     provider: "yellowcard",
@@ -86,8 +89,9 @@ export function yellowCardQuote(input: {
     sendAmount: round2(send),
     receiveCurrency: input.to,
     receiveAmount: round2(receive),
-    // Rates are live, but the binding price comes from submitting the payment.
-    estimated: true,
+    // Live rates and channel fees. Yellow Card fixes the final price when the
+    // payment is submitted, and the payout checks it against this.
+    estimated: false,
     basis: input.basis,
     expiresAt: null,
   });
@@ -255,6 +259,56 @@ export function kotaniPayoutBody(
   };
 }
 
+/**
+ * Kotani offramp (POST /offramp, checked 4 October 2026): the payer sends USDC
+ * to the escrow address in the reply, and Kotani pays the recipient in fiat
+ * within the same order.
+ */
+export function kotaniOfframpBody(input: {
+  r: Recipient;
+  usdc: number;
+  referenceId: string;
+  callbackUrl: string;
+}) {
+  const { r } = input;
+  return {
+    cryptoAmount: input.usdc,
+    currency: r.currency,
+    chain: "BASE",
+    token: "USDC",
+    referenceId: input.referenceId,
+    callbackUrl: input.callbackUrl,
+    ...(r.rail === "momo"
+      ? {
+          mobileMoneyReceiver: {
+            phoneNumber: r.accountNumber,
+            accountName: r.name,
+            networkProvider: kotaniNetwork(r.network),
+          },
+        }
+      : {
+          bankReceiver: {
+            name: r.name,
+            address: r.address ?? "",
+            bankCode: r.bankCode ?? "",
+            accountNumber: r.accountNumber,
+            country: r.country,
+            bankName: r.bankName,
+          },
+        }),
+  };
+}
+
+/** Kotani's offramp names networks MPESA, MTN, AIRTEL or VODAFONE. */
+export function kotaniNetwork(network: string | undefined): string | undefined {
+  if (!network) return undefined;
+  if (/mpesa|m-pesa|saf/i.test(network)) return "MPESA";
+  if (/airtel/i.test(network)) return "AIRTEL";
+  if (/mtn/i.test(network)) return "MTN";
+  if (/voda/i.test(network)) return "VODAFONE";
+  return network.toUpperCase();
+}
+
 /** Yellow Card submit-send body (disbursement journey: POST /business/payments). */
 export function yellowCardPaymentBody(input: {
   r: Recipient;
@@ -303,6 +357,15 @@ export function klashaBeneficiaryBody(r: Recipient) {
 }
 
 /** Minisend offramp order (offramp/create-order). */
+/** Minisend names networks by operator ("Safaricom"); ours may be "MPESA" or a Payaza code. */
+export function minisendNetwork(network: string | undefined): string | undefined {
+  if (!network) return undefined;
+  if (/mpesa|m-pesa|saf/i.test(network)) return "Safaricom";
+  if (/airtel/i.test(network)) return "Airtel";
+  if (/mtn/i.test(network)) return "MTN";
+  return network;
+}
+
 export function minisendOrderBody(
   r: Recipient,
   amountUsdc: number,
@@ -314,16 +377,17 @@ export function minisendOrderBody(
     currency: r.currency,
     refund_address: refundAddress,
     reference,
+    // Field names per Minisend's create-order reference (checked 4 October 2026).
     recipient:
       r.rail === "momo"
         ? {
-            method: "mobile_money",
-            phone_number: r.accountNumber,
-            network: r.network,
+            method: "MOBILE",
+            phone: r.accountNumber,
+            mobile_network: minisendNetwork(r.network),
             account_name: r.name,
           }
         : {
-            method: "bank",
+            method: "BANK",
             account_number: r.accountNumber,
             institution: r.bankCode,
             account_name: r.name,
