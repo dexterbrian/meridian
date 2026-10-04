@@ -577,7 +577,24 @@ Who covers what (summary; the registry has the full lists):
 
 ### 4.4c Status of the provider code
 
-Built to each provider's docs (`src/server/partners/adapters.ts`, request bodies and parsers in `src/lib/partner-requests.ts`). **Not yet run against their sandboxes: no keys.** Without keys, sandbox mode uses estimates and simulated execution, labelled as such. Kotani's offramp create fields aren't in the docs we have, so live Kotani USDC collection is not wired. Webhooks for the four routed providers are still to build; until then a live payout stays "paying out" until an admin confirms.
+Built to each provider's docs (`src/server/partners/adapters.ts`, request bodies and parsers in `src/lib/partner-requests.ts`). **Not yet run against their sandboxes: no keys.** Without keys, sandbox mode uses estimates and simulated execution, labelled as such. `npm run partners:check` asks each keyed provider for a live quote (nothing pays).
+
+- **Yellow Card fees.** Live quotes read each channel's flat fee (`feeUSD` from `GET /business/channels`, cached 10 minutes) for the deposit and payout legs. A USD/EUR/GBP account deposit has no channel listed, so that leg still takes an assumed 1%. No active payout channel means no quote.
+- **Kotani USDC.** `POST /offramp` (USDC on Base) returns an escrow address; Kotani pays the recipient within the same order.
+- **Open decision: Meridian's 1% on one-order USDC routes.** Kotani's offramp and Minisend's order take the payer's USDC and pay the recipient in one step, so the payer must send exactly the provider's amount and Meridian has nowhere to keep its fee. Until decided, those live payments carry no Meridian fee and are marked `meridianFeeNotCollected`. Options: the payer sends to Meridian's own wallet and Meridian funds the order (needs on-chain deposit watching), or Meridian invoices its fee separately.
+
+**Webhooks** (`/api/webhooks/{yellowcard,kotani,minisend,klasha}`, checks and parsing in `src/lib/partner-webhooks.ts`, tested):
+
+| Provider | How it's checked | Events used |
+|---|---|---|
+| Yellow Card | `X-YC-Signature`: base64 HMAC-SHA256 of the raw body with the API key's secret | `SEND.*` payouts, `RECEIVE.*` collections (legacy `PAYMENT.*`, `COLLECTION.*`) |
+| Minisend | `X-Minisend-Signature-V2`: `t=…,v1=` hex HMAC of `t.body`, 5 minute window; else V1 over the body. `MINISEND_WEBHOOK_SECRET` | `offramp.completed`, `.failed`, `.expired` |
+| Kotani | `X-Kotani-Signature`: `sha256=` hex HMAC of `JSON.stringify({event, data})`. `KOTANI_WEBHOOK_SECRET` | offramp, deposit and withdrawal status updates |
+| Klasha | Unsigned (none documented). Our URL carries `?token=KLASHA_WEBHOOK_TOKEN`, and an event can only move a payout by the reference Klasha gave us | payout status |
+
+Each event is logged under its own key first, so a repeat delivery changes nothing. Only the provider carrying a payment can move it.
+
+**Admin.** Releasing a held routed transfer, or retrying a failed routed payout, goes back to the same provider with the same payout reference, so the provider can spot a duplicate.
 
 ### 4.5 Quote object (internal)
 
@@ -669,7 +686,7 @@ Proven end to end against the sandbox by `npm run e2e:sandbox`: two clicks make 
 
 ### 6.3 Transfer
 
-**Built (routed, `/app/send`).** The business saves a recipient (country, currency, mobile money / bank / wallet, SWIFT or IBAN abroad), enters what the recipient should get, and picks how it pays (its local mobile money or bank, a USD/EUR/GBP account, or USDC). It sees every provider's price, cheapest first. On send, a transaction `MRDT-XXXXXXXX` is created and opened with fallback (4.1 step 5). When the business's money reaches the provider, the same provider pays the recipient. Compliance checks on transfers (limits, screening) are still to add.
+**Built (routed, `/app/send`).** The business saves a recipient (country, currency, mobile money / bank / wallet, SWIFT or IBAN abroad), enters what the recipient should get, and picks how it pays (its local mobile money or bank, a USD/EUR/GBP account, or USDC). It sees every provider's price, cheapest first. On send, a transaction `MRDT-XXXXXXXX` is created and opened with fallback (4.1 step 5). When the business's money reaches the provider, the same provider pays the recipient. Checks before sending: a FATF-blacklisted recipient country is refused; USD 10,000 or more is flagged; the same to a recipient never paid before is held after the business pays in, until an admin releases it. Minisend is left out of a held transfer's providers, since it pays out in the same order as the deposit. Name screening against sanctions lists is still to add (5.2).
 
 Original plan:
 
