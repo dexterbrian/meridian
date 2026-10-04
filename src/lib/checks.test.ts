@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   LARGE_AMOUNT_USD,
   checksBeforeCharge,
+  checksBeforeTransfer,
   checksOnCollected,
   VIRTUAL_ACCOUNT_GRACE_MINUTES,
   namesMatch,
@@ -140,5 +141,37 @@ describe("namesMatch", () => {
   it("rejects a different name", () => {
     expect(namesMatch("Kilimo Fresh Exports", "Chibunkem Ojiaku")).toBe(false);
     expect(namesMatch("", "Anything")).toBe(false);
+  });
+});
+
+describe("checksBeforeTransfer", () => {
+  it("blocks payments to a FATF blacklisted country", () => {
+    const hits = checksBeforeTransfer({
+      recipientCountry: "ir",
+      usdEquivalent: 100,
+      newRecipient: false,
+    });
+    expect(strongestAction(hits)).toBe("block");
+  });
+
+  it("holds a large first payment to a new recipient, but only notes it for a known one", () => {
+    const first = checksBeforeTransfer({
+      recipientCountry: "CN",
+      usdEquivalent: 10_000,
+      newRecipient: true,
+    });
+    expect(first).toMatchObject([{ rule: "T_LARGE_FIRST_PAYMENT", action: "hold" }]);
+    const known = checksBeforeTransfer({
+      recipientCountry: "CN",
+      usdEquivalent: 25_000,
+      newRecipient: false,
+    });
+    expect(known).toMatchObject([{ rule: "T_LARGE_AMOUNT", action: "none" }]);
+  });
+
+  it("lets a small payment through untouched", () => {
+    expect(
+      checksBeforeTransfer({ recipientCountry: "JP", usdEquivalent: 9_999, newRecipient: true }),
+    ).toEqual([]);
   });
 });

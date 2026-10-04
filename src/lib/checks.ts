@@ -59,6 +59,47 @@ export function checksBeforeCharge(input: {
 }
 
 /**
+ * Run before a business pays a supplier. A block stops the transfer before any
+ * provider hears of it. A hold lets the business pay in, then waits for an
+ * admin before the supplier is paid: a large first payment to a new recipient
+ * is the classic pattern for invoice fraud and mule accounts.
+ */
+export function checksBeforeTransfer(input: {
+  recipientCountry: string;
+  usdEquivalent: number;
+  /** True until a payment to this recipient has settled. */
+  newRecipient: boolean;
+}): CheckHit[] {
+  const hits: CheckHit[] = [];
+  const country = input.recipientCountry.toUpperCase();
+  if (FATF_BLACKLIST.includes(country)) {
+    hits.push({
+      rule: "T_FATF_BLACKLIST",
+      severity: "high",
+      action: "block",
+      evidence: { recipientCountry: country },
+      message: "We cannot send payments to this country.",
+    });
+  }
+  if (input.usdEquivalent >= LARGE_AMOUNT_USD) {
+    hits.push({
+      rule: input.newRecipient ? "T_LARGE_FIRST_PAYMENT" : "T_LARGE_AMOUNT",
+      severity: input.newRecipient ? "high" : "medium",
+      action: input.newRecipient ? "hold" : "none",
+      evidence: {
+        usdEquivalent: input.usdEquivalent,
+        threshold: LARGE_AMOUNT_USD,
+        newRecipient: input.newRecipient,
+      },
+      message: input.newRecipient
+        ? `First payment of USD ${LARGE_AMOUNT_USD.toLocaleString("en-US")} or more to a new recipient. Meridian checks it before the supplier is paid.`
+        : `Transfer of USD ${LARGE_AMOUNT_USD.toLocaleString("en-US")} or more.`,
+    });
+  }
+  return hits;
+}
+
+/**
  * Run when Payaza confirms a payment. The money is already collected, so the
  * only actions left are hold (wait for an admin) or none.
  */
