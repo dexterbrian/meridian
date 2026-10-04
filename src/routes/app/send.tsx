@@ -346,6 +346,12 @@ function TransferPanel(props: {
           {t().providerName} is paying {t().recipientName}. We confirm when it lands.
         </Notice>
       </Show>
+      <Show when={t().status === "held"}>
+        <Notice tone="warning">
+          Your payment arrived. This is a large first payment to a new recipient, so Meridian checks
+          it before {t().recipientName} is paid. We'll email you within one business day.
+        </Notice>
+      </Show>
       <Show when={t().status === "failed"}>
         <Notice tone="danger">{t().failureReason ?? "This transfer failed."}</Notice>
       </Show>

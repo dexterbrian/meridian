@@ -1,8 +1,9 @@
 import "server-only";
-import { checksBeforeCharge, strongestAction } from "~/lib/checks";
+import { checksBeforeCharge, checksBeforeTransfer, strongestAction } from "~/lib/checks";
 import type { Json, Tables } from "~/lib/database.types";
 import { currency as currencyInfo, isCurrency } from "~/lib/fees";
 import type { Recipient } from "~/lib/partner-requests";
+import type { RoutedEvent } from "~/lib/partner-webhooks";
 import { provider as providerProfile, type ProviderId, type Rail } from "~/lib/providers";
 import { makeTransferReference } from "~/lib/reference";
 import {
@@ -19,7 +20,9 @@ import { ADAPTERS, type PayinInstructions } from "../partners/adapters";
 import { supabaseAdmin } from "../supabase";
 import {
   CollectError,
+  addFlags,
   loadBusiness,
+  logEvent,
   loadTx,
   pickPayoutAccount,
   settle,
@@ -130,6 +133,8 @@ type Stored = {
   attempts?: Attempt[];
   payoutSimulated?: boolean;
   collectionSimulated?: boolean;
+  /** A check asked for an admin to look before the recipient is paid. */
+  holdForReview?: boolean;
 };
 
 /**
@@ -155,7 +160,21 @@ async function openWithFallback(
       }),
     );
     const q = quote as PricedQuote;
-    const payin: PayinInstructions = { ...result, amount: q.price.total };
+    // A live USDC order (Kotani, Minisend) takes the deposit and pays the
+    // recipient in one go, so the payer must send exactly the provider's amount
+    // and Meridian has nowhere to keep its 1%. Until there's a way to collect
+    // it (an open decision, TRD 4.4c), these payments carry no Meridian fee and
+    // say so.
+    const oneOrder = result.kind === "stablecoin" && !result.simulated;
+    const price = oneOrder
+      ? {
+          amount: q.price.amount,
+          providerFee: Math.round((result.amount - q.price.amount) * 100) / 100,
+          meridianFee: 0,
+          total: result.amount,
+        }
+      : q.price;
+    const payin: PayinInstructions = { ...result, amount: price.total };
     const next = await transition(
       tx,
       tx.status as "quoted" | "awaiting_payin",
@@ -164,14 +183,19 @@ async function openWithFallback(
         partner_in: q.provider,
         partner_out: q.provider,
         send_currency: q.sendCurrency,
-        send_amount: q.price.amount,
-        partner_fee_in: q.price.providerFee,
-        meridian_fee: q.price.meridianFee,
-        total_charged: q.price.total,
-        usd_equivalent: toUsd(q.price.total, q.sendCurrency),
+        send_amount: price.amount,
+        partner_fee_in: price.providerFee,
+        meridian_fee: price.meridianFee,
+        total_charged: price.total,
+        usd_equivalent: toUsd(price.total, q.sendCurrency),
         payin_details: payin as unknown as NonNullable<Json>,
         quote_expires_at: q.expiresAt,
-        quote: { ...stored, chosen: q.provider, attempts } as unknown as NonNullable<Json>,
+        quote: {
+          ...stored,
+          chosen: q.provider,
+          attempts,
+          ...(oneOrder ? { meridianFeeNotCollected: true } : {}),
+        } as unknown as NonNullable<Json>,
       },
       { source, payload: { provider: q.provider, attempts, simulated: result.simulated } },
     );
@@ -384,7 +408,7 @@ export async function createTransfer(businessId: string, input: TransferInput): 
   if (!business || !r) throw new CollectError("not_found", "Pick a recipient.");
   if (business.kyb_status === "frozen")
     throw new CollectError("closed", "This business cannot send payments right now.");
-  const plan = await quoteRoute(
+  const quoted = await quoteRoute(
     transferRequest(
       business,
       r,
@@ -392,6 +416,26 @@ export async function createTransfer(businessId: string, input: TransferInput): 
       input.amount,
     ),
   );
+  const cheapest = quoted.quotes[0];
+  const hits = cheapest
+    ? checksBeforeTransfer({
+        recipientCountry: r.country,
+        usdEquivalent: toUsd(cheapest.price.total, cheapest.sendCurrency),
+        newRecipient: !r.first_paid_at,
+      })
+    : [];
+  if (strongestAction(hits) === "block") {
+    throw new CollectError(
+      "blocked",
+      hits.find((h) => h.action === "block")?.message ?? "Blocked by a check.",
+    );
+  }
+  const holdForReview = strongestAction(hits) === "hold";
+  // A hold stops the payout after the business pays in. Minisend pays the
+  // recipient within the same order as the deposit, so it cannot be held.
+  const plan = holdForReview
+    ? { ...quoted, quotes: quoted.quotes.filter((q) => q.provider !== "minisend") }
+    : quoted;
   const top = plan.quotes[0];
   if (!top)
     throw new CollectError(
@@ -422,7 +466,7 @@ export async function createTransfer(businessId: string, input: TransferInput): 
       payer_name: business.trading_name || business.name,
       payer_email: business.contact_email,
       payer_country: business.country,
-      quote: { routed: true, plan } as unknown as NonNullable<Json>,
+      quote: { routed: true, plan, holdForReview } as unknown as NonNullable<Json>,
     })
     .select()
     .single();
@@ -439,6 +483,7 @@ export async function createTransfer(businessId: string, input: TransferInput): 
     console.error("[routed] transfer insert failed", error?.message);
     throw new CollectError("db", "We could not create this transfer. Please try again.");
   }
+  await addFlags(tx, hits, business.name);
   return openWithFallback(tx, plan, input.fromRail, recipientFromRow(r), "system");
 }
 
@@ -465,6 +510,16 @@ export async function routedPayinReceived(
     { source, payload: facts.payload ?? { simulated: facts.simulated } },
   );
   if (!collected) return;
+  if (stored.holdForReview) {
+    await transition(
+      collected,
+      "collected",
+      "held",
+      {},
+      { source, payload: { reason: "A check asked for review before the recipient is paid." } },
+    );
+    return;
+  }
   await routedPayout(collected, source);
 }
 
@@ -480,19 +535,29 @@ async function payoutRecipient(tx: Tx): Promise<Recipient | null> {
   return account && business ? recipientFromAccount(account, business.name) : null;
 }
 
-async function routedPayout(tx: Tx, source: EventSource): Promise<void> {
+/**
+ * Pays the recipient through the provider that holds the money. The payout
+ * reference is claimed once; an admin retry reuses it, so the provider can
+ * spot a duplicate.
+ */
+export async function routedPayout(tx: Tx, source: EventSource): Promise<void> {
   const provider = tx.partner_out as ProviderId | null;
   const stored = (tx.quote ?? {}) as unknown as Stored;
   const quote = stored.plan?.quotes.find((q) => q.provider === provider);
   const recipient = await payoutRecipient(tx);
-  const ref = `${tx.reference}-P`;
-  const { data: claimed } = await db()
-    .from("transactions")
-    .update({ payout_reference: ref })
-    .eq("id", tx.id)
-    .is("payout_reference", null)
-    .select()
-    .maybeSingle();
+  if (tx.status !== "collected") return;
+  const ref = tx.payout_reference ?? `${tx.reference}-P`;
+  // A retry or release already won a conditional move back to collected, so
+  // it reuses the reference; a first payout claims it.
+  const { data: claimed } = tx.payout_reference
+    ? { data: tx }
+    : await db()
+        .from("transactions")
+        .update({ payout_reference: ref })
+        .eq("id", tx.id)
+        .is("payout_reference", null)
+        .select()
+        .maybeSingle();
   if (!claimed) return; // Someone else holds the payout.
 
   if (!provider || !quote || !recipient) {
@@ -523,7 +588,7 @@ async function routedPayout(tx: Tx, source: EventSource): Promise<void> {
       { source, payload: { provider, partnerRef: out.partnerRef, simulated: out.simulated } },
     );
     // A live provider confirms by webhook; a simulated one is done now.
-    if (paying && out.simulated) await finish(paying, source);
+    if (paying && out.simulated) await finish(paying, source, true);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
     await transition(
@@ -538,9 +603,9 @@ async function routedPayout(tx: Tx, source: EventSource): Promise<void> {
   }
 }
 
-async function finish(tx: Tx, source: EventSource): Promise<void> {
+async function finish(tx: Tx, source: EventSource, simulated: boolean): Promise<void> {
   if (tx.kind === "collection") {
-    await settle(tx, { simulated: true }, source);
+    await settle(tx, { simulated }, source);
     return;
   }
   const done = await transition(
@@ -548,7 +613,7 @@ async function finish(tx: Tx, source: EventSource): Promise<void> {
     "paying_out",
     "settled",
     { settled_at: new Date().toISOString() },
-    { source, payload: { simulated: true } },
+    { source, payload: { simulated } },
   );
   if (done?.recipient_id) {
     await db()
@@ -576,4 +641,130 @@ export async function simulateRoutedPayin(transactionId: string): Promise<void> 
 
 export function isRouted(tx: Pick<Tx, "partner_in">): boolean {
   return !!tx.partner_in && tx.partner_in !== "payaza";
+}
+
+/* --------------------------- provider webhooks ---------------------------- */
+
+async function findForEvent(e: RoutedEvent): Promise<Tx | null> {
+  if (e.reference) {
+    const byRef = await db()
+      .from("transactions")
+      .select()
+      .eq("reference", e.reference)
+      .maybeSingle();
+    if (byRef.data) return byRef.data;
+    const byPayout = await db()
+      .from("transactions")
+      .select()
+      .eq("payout_reference", e.reference)
+      .maybeSingle();
+    if (byPayout.data) return byPayout.data;
+  }
+  if (e.partnerRef) {
+    const { data } = await db()
+      .from("transactions")
+      .select()
+      .eq("partner_out_ref", e.partnerRef)
+      .maybeSingle();
+    if (data) return data;
+  }
+  return null;
+}
+
+/**
+ * A provider told us something about a payment, after its signature checked
+ * out. The event is logged first under its own key, so a repeat delivery does
+ * nothing. Then the payment moves on: money in, then the payout; or the payout
+ * landed or failed.
+ */
+export async function handleRoutedEvent(
+  e: RoutedEvent,
+  payload: unknown,
+): Promise<"ok" | "duplicate" | "unknown_reference" | "ignored"> {
+  const tx = await findForEvent(e);
+  if (!tx) return "unknown_reference";
+  // Only the provider carrying the payment may move it.
+  if (tx.partner_in !== e.provider && tx.partner_out !== e.provider) return "ignored";
+  const source = `${e.provider}_webhook` as EventSource;
+  const logged = await logEvent({
+    transactionId: tx.id,
+    source,
+    from: null,
+    to: null,
+    payload: { event: e, body: payload },
+    key: e.key,
+  });
+  if (logged === "duplicate") return "duplicate";
+  if (e.outcome === "pending") return "ok";
+  const name = providerProfile(e.provider).name;
+
+  const payin = e.stage === "payin" || (e.stage === "both" && tx.status === "awaiting_payin");
+  if (payin) {
+    if (tx.status !== "awaiting_payin") return "ignored";
+    if (e.outcome === "failed") {
+      await transition(
+        tx,
+        "awaiting_payin",
+        "failed",
+        { failure_reason: e.reason ?? `${name} could not take the payment.` },
+        { source, payload },
+      );
+      return "ok";
+    }
+    if (e.stage === "payin") {
+      await routedPayinReceived(tx, source, { simulated: false, payload });
+      return "ok";
+    }
+    // One order took the money and paid the recipient (Minisend).
+    const collected = await transition(
+      tx,
+      "awaiting_payin",
+      "collected",
+      { collected_at: new Date().toISOString() },
+      { source, payload },
+    );
+    const paying = collected
+      ? await transition(
+          collected,
+          "collected",
+          "paying_out",
+          { payout_reference: `${tx.reference}-P`, partner_out_ref: e.partnerRef },
+          { source, payload },
+        )
+      : null;
+    if (paying) await finish(paying, source, false);
+    return "ok";
+  }
+
+  if (tx.status !== "paying_out") return "ignored";
+  if (e.outcome === "success") {
+    await finish(tx, source, false);
+    return "ok";
+  }
+  await transition(
+    tx,
+    "paying_out",
+    "failed",
+    {
+      failure_reason: `${name} could not pay out${e.reason ? `: ${e.reason}` : ""}. The money is with ${name}; an admin will retry or refund.`,
+    },
+    { source, payload },
+  );
+  return "ok";
+}
+
+/* ---------------------------------- admin --------------------------------- */
+
+/** Admin retry of a routed payout that failed after the money arrived. Same provider, same reference. */
+export async function retryRoutedPayout(tx: Tx, adminId: string): Promise<void> {
+  if (tx.status !== "failed" || !tx.collected_at)
+    throw new CollectError("invalid", "Only a failed payout can be retried.");
+  const back = await transition(
+    tx,
+    "failed",
+    "collected",
+    { failure_reason: null },
+    { source: "admin", payload: { adminId, action: "retry_payout" } },
+  );
+  if (back) await routedPayout(back, "admin");
 }

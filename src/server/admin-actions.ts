@@ -11,6 +11,7 @@ import {
   adminRetryPayout,
   runPayoutRetry,
 } from "./money/collect";
+import { isRouted, retryRoutedPayout, routedPayout } from "./money/routed";
 import { supabaseAdmin } from "./supabase";
 
 // Server functions for /admin. Every one checks the admin claim first.
@@ -99,13 +100,14 @@ export async function actOnTransaction(input: {
   try {
     switch (parsed.data.action) {
       case "release":
-        await adminRelease(tx, admin.id, parsed.data.note);
+        await adminRelease(tx, admin.id, parsed.data.note, isRouted(tx) ? routedPayout : undefined);
         break;
       case "reject":
         await adminReject(tx, admin.id, parsed.data.note);
         break;
       case "retry_payout":
-        await adminRetryPayout(tx, admin.id);
+        if (isRouted(tx)) await retryRoutedPayout(tx, admin.id);
+        else await adminRetryPayout(tx, admin.id);
         break;
       case "mark_refunded":
         await adminMarkRefunded(tx, admin.id, parsed.data.note);

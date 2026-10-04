@@ -52,7 +52,15 @@ export type PaymentRequest = Tables<"payment_requests">;
 export type Business = Tables<"businesses">;
 export type PayoutAccount = Tables<"payout_accounts">;
 
-export type EventSource = "system" | "payaza_webhook" | "admin" | "job";
+export type EventSource =
+  | "system"
+  | "payaza_webhook"
+  | "kotani_webhook"
+  | "yellowcard_webhook"
+  | "klasha_webhook"
+  | "minisend_webhook"
+  | "admin"
+  | "job";
 
 /** What the payer needs to finish paying. Stored on transactions.payin_details. */
 export type PayinDetails =
@@ -113,7 +121,7 @@ const ROUTED_METHOD_LABEL: Record<string, string> = {
 
 const db = () => supabaseAdmin();
 
-async function logEvent(input: {
+export async function logEvent(input: {
   transactionId: string;
   source: EventSource;
   from: string | null;
@@ -165,7 +173,7 @@ export async function transition(
   return data;
 }
 
-async function addFlags(tx: Tx, hits: CheckHit[], businessName: string) {
+export async function addFlags(tx: Tx, hits: CheckHit[], businessName: string) {
   if (hits.length === 0) return;
   const { error } = await db()
     .from("aml_flags")
@@ -1259,7 +1267,13 @@ export async function runPayoutRetry(): Promise<{
 
 /* ---------------------------------- admin --------------------------------- */
 
-export async function adminRelease(tx: Tx, adminId: string, note: string): Promise<void> {
+/** `payout` starts the payout once released: Payaza Transfers unless a routed provider holds the money. */
+export async function adminRelease(
+  tx: Tx,
+  adminId: string,
+  note: string,
+  payout: (tx: Tx, source: EventSource) => Promise<void> = startPayout,
+): Promise<void> {
   if (tx.status !== "held")
     throw new CollectError("invalid", "Only a held payment can be released.");
   await db()
@@ -1279,7 +1293,7 @@ export async function adminRelease(tx: Tx, adminId: string, note: string): Promi
     {},
     { source: "admin", payload: { note, adminId } },
   );
-  if (collected) await startPayout(collected, "admin");
+  if (collected) await payout(collected, "admin");
 }
 
 export async function adminReject(tx: Tx, adminId: string, note: string): Promise<void> {

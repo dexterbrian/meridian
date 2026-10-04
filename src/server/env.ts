@@ -129,6 +129,19 @@ export const env = {
         }
       : null;
   },
+  // Webhook secrets, separate from the API keys: a webhook can arrive (and must
+  // be checked) whatever else is configured. Yellow Card signs with the API
+  // key's own secret, so it has none of its own.
+  get kotaniWebhookSecret() {
+    return read("KOTANI_WEBHOOK_SECRET");
+  },
+  get minisendWebhookSecret() {
+    return read("MINISEND_WEBHOOK_SECRET");
+  },
+  /** Klasha doesn't sign webhooks, so the URL we give it carries this token. */
+  get klashaWebhookToken() {
+    return read("KLASHA_WEBHOOK_TOKEN");
+  },
   /**
    * Sandbox only: providers whose simulated execution should fail, comma separated
    * (e.g. "yellowcard"). Lets tests and demos show a fallback. Ignored in live mode.
