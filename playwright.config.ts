@@ -29,6 +29,8 @@ export default defineConfig({
     env: {
       MERIDIAN_MODE: "sandbox",
       PARTNER_SIMULATE_FAIL: "yellowcard",
+      // Lets the tests send Minisend webhooks signed like the real ones.
+      MINISEND_WEBHOOK_SECRET: "e2e-minisend-secret",
       PAYAZA_SIMULATE_PAYOUTS: "true",
       // No emails from test runs.
       RESEND_API_KEY: "",

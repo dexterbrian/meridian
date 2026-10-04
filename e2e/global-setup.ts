@@ -60,7 +60,7 @@ export default async function globalSetup(config: FullConfig) {
   if (aErr) throw new Error(`payout account: ${aErr.message}`);
 
   const requests: string[] = [];
-  for (let i = 0; i < 2; i++) {
+  for (let i = 0; i < 3; i++) {
     const ref = reference();
     const { error: rErr } = await db.from("payment_requests").insert({
       business_id: business.id,
