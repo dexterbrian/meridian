@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { contactConfirmation, demoEmail, leadAlert, waitlistConfirmation } from "./templates";
+import {
+  contactConfirmation,
+  demoEmail,
+  leadAlert,
+  waitlistConfirmEmail,
+  waitlistWelcome,
+} from "./templates";
 
 const waitlist = {
   business_name: "Kilimo Fresh Exports Ltd",
@@ -11,8 +17,25 @@ const waitlist = {
 };
 
 describe("email templates", () => {
-  it("greets the waitlist signup by first name", () => {
-    const e = waitlistConfirmation(waitlist);
+  it("asks a new waitlist signup to confirm, with one button and the link in plain text", () => {
+    const e = waitlistConfirmEmail({
+      contactName: "Amina <b>Wanjiru</b>",
+      businessName: "Kilimo & Sons",
+      confirmUrl: "https://meridian.appify.co.ke/waitlist/confirm?token=abc&x=1",
+    });
+    expect(e.subject).toBe("Confirm your place on the Meridian waitlist");
+    expect(e.html.match(/Confirm my place/g)).toHaveLength(1);
+    expect(e.html).toContain(
+      'href="https://meridian.appify.co.ke/waitlist/confirm?token=abc&amp;x=1"',
+    );
+    expect(e.html).toContain("Kilimo &amp; Sons");
+    expect(e.text).toContain(
+      "Confirm my place: https://meridian.appify.co.ke/waitlist/confirm?token=abc&x=1",
+    );
+  });
+
+  it("greets the waitlist signup by first name once they confirm", () => {
+    const e = waitlistWelcome(waitlist);
     expect(e.subject).toBe("You're on the Meridian waitlist");
     expect(e.html).toContain("Welcome aboard, Amina");
     expect(e.text).toContain("Business: Kilimo Fresh Exports Ltd");

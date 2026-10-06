@@ -215,13 +215,13 @@ isOneToOne: false
                   ]
                 },"waitlist_signups": {
                   Row: {
-                    "business_name": string,"contact_name": string,"country": string | null,"created_at": string,"email": string,"id": string,"monthly_volume": string | null,"pain_point": string | null
+                    "business_name": string,"confirm_emails_sent": number,"confirm_expires_at": string | null,"confirm_token_hash": string | null,"confirmed_at": string | null,"contact_name": string,"country": string | null,"created_at": string,"email": string,"id": string,"last_confirm_sent_at": string | null,"monthly_volume": string | null,"pain_point": string | null
                   }
                   Insert: {
-                    "business_name": string,"contact_name": string,"country"?: string | null,"created_at"?: string,"email": string,"id"?: string,"monthly_volume"?: string | null,"pain_point"?: string | null
+                    "business_name": string,"confirm_emails_sent"?: number,"confirm_expires_at"?: string | null,"confirm_token_hash"?: string | null,"confirmed_at"?: string | null,"contact_name": string,"country"?: string | null,"created_at"?: string,"email": string,"id"?: string,"last_confirm_sent_at"?: string | null,"monthly_volume"?: string | null,"pain_point"?: string | null
                   }
                   Update: {
-                    "business_name"?: string,"contact_name"?: string,"country"?: string | null,"created_at"?: string,"email"?: string,"id"?: string,"monthly_volume"?: string | null,"pain_point"?: string | null
+                    "business_name"?: string,"confirm_emails_sent"?: number,"confirm_expires_at"?: string | null,"confirm_token_hash"?: string | null,"confirmed_at"?: string | null,"contact_name"?: string,"country"?: string | null,"created_at"?: string,"email"?: string,"id"?: string,"last_confirm_sent_at"?: string | null,"monthly_volume"?: string | null,"pain_point"?: string | null
                   }
                   Relationships: [
                     

@@ -16,7 +16,8 @@ const iso2 = z
 export const waitlistSchema = z.object({
   business_name: text(200).min(1, "Business name is required"),
   contact_name: text(200).min(1, "Your name is required"),
-  email: z.email("Enter a valid email").max(254),
+  // Lower-cased so a repeat sign-up finds the earlier one.
+  email: z.string().trim().toLowerCase().pipe(z.email("Enter a valid email").max(254)),
   country: optionalText(100),
   monthly_volume: optionalText(100),
   pain_point: optionalText(2000),

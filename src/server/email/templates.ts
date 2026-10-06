@@ -12,6 +12,8 @@ type Layout = {
   intro: string;
   rows: Row[];
   footnote?: string;
+  /** One call-to-action button, shown after the intro. */
+  action?: { label: string; href: string };
   /** Demo emails say that no money moved. */
   demo?: boolean;
 };
@@ -40,6 +42,7 @@ export function render(p: Layout): Email {
     <div style="background:#ffffff;border-radius:14px;padding:24px;margin-top:18px;border:1px solid #e5e7eb">
       <h1 style="margin:0 0 10px;font-size:20px;color:#0f172a">${escapeHtml(p.heading)}</h1>
       <p style="margin:0 0 16px;font-size:14px;line-height:22px;color:#374151;white-space:pre-line">${escapeHtml(p.intro)}</p>
+      ${p.action ? `<p style="margin:0 0 20px"><a href="${escapeHtml(p.action.href)}" style="display:inline-block;background:#0b3b32;color:#ffffff;font-weight:600;font-size:15px;text-decoration:none;padding:12px 22px;border-radius:999px">${escapeHtml(p.action.label)}</a></p>` : ""}
       <table style="width:100%;border-collapse:collapse;border-top:1px solid #e5e7eb">${rows}</table>
       ${p.footnote ? `<p style="margin:18px 0 0;font-size:12px;line-height:18px;color:#6b7280">${escapeHtml(p.footnote)}</p>` : ""}
     </div>
@@ -50,6 +53,7 @@ export function render(p: Layout): Email {
     "",
     p.intro,
     "",
+    ...(p.action ? [`${p.action.label}: ${p.action.href}`, ""] : []),
     ...p.rows.map((r) => `${r.label}: ${r.value}`),
     ...(p.footnote ? ["", p.footnote] : []),
     "",
@@ -60,7 +64,26 @@ export function render(p: Layout): Email {
 
 const dash = (v: string | undefined) => (v && v.trim() !== "" ? v : "—");
 
-export function waitlistConfirmation(w: WaitlistInput): Email {
+/** Sent when someone joins the waitlist. They only count once they click. */
+export function waitlistConfirmEmail(p: {
+  contactName: string;
+  businessName: string;
+  confirmUrl: string;
+}): Email {
+  return render({
+    subject: "Confirm your place on the Meridian waitlist",
+    heading: `One click to confirm, ${p.contactName.split(" ")[0] || "there"}`,
+    intro:
+      "Thanks for joining the Meridian waitlist. Please confirm your email so we can reach you when early access opens.",
+    action: { label: "Confirm my place", href: p.confirmUrl },
+    rows: [{ label: "Business", value: p.businessName }],
+    footnote:
+      "This link works for 7 days. Didn't sign up? Ignore this email and you won't hear from us again.",
+  });
+}
+
+/** Sent once the person confirms their email. */
+export function waitlistWelcome(w: WaitlistInput): Email {
   return render({
     subject: "You're on the Meridian waitlist",
     heading: `Welcome aboard, ${w.contact_name.split(" ")[0] || "there"}`,
@@ -93,7 +116,7 @@ export function contactConfirmation(c: ContactInput): Email {
 export type Lead =
   { kind: "waitlist"; data: WaitlistInput } | { kind: "contact"; data: ContactInput };
 
-/** Internal alert to Appify for every new waitlist signup or contact message (M-06). */
+/** Internal alert to Appify when a waitlist signup confirms their email, or a contact message arrives (M-06). */
 export function leadAlert(lead: Lead): Email {
   if (lead.kind === "waitlist") {
     const w = lead.data;

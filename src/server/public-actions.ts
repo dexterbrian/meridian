@@ -21,10 +21,25 @@ import {
   type WaitlistInput,
 } from "~/lib/schemas";
 import { sendEmail, sendToAdmin } from "./email/send";
-import { contactConfirmation, demoEmail, leadAlert, waitlistConfirmation } from "./email/templates";
+import {
+  contactConfirmation,
+  demoEmail,
+  leadAlert,
+  waitlistConfirmEmail,
+  waitlistWelcome,
+} from "./email/templates";
 import { env } from "./env";
 import { RATE_LIMITED, allowRequest, requestOrigin } from "./request";
 import { supabaseAdmin } from "./supabase";
+import {
+  CONFIRM_TTL_MS,
+  confirmEmailAllowance,
+  hashToken,
+  isTokenShaped,
+  linkExpired,
+  looksLikeABot,
+  newConfirmToken,
+} from "./waitlist-confirmation";
 
 /** Whether the app runs against partner sandboxes. Drives the banner. */
 export async function getSandboxMode(): Promise<boolean> {
@@ -41,24 +56,200 @@ function invalid(error: z.ZodError): { ok: false; error: string } {
 }
 
 /* -------------------------------- waitlist -------------------------------- */
+// Joining saves the signup and emails a "Confirm my place" link. The person
+// only counts once they click it; the welcome email and the admin lead alert
+// wait for that click, so bot signups never reach anyone but the address typed in.
 
-export async function joinWaitlist(input: WaitlistInput): Promise<ActionResult> {
+const WAITLIST_ROW =
+  "id, business_name, contact_name, email, country, monthly_volume, pain_point, confirmed_at, confirm_expires_at, confirm_emails_sent, last_confirm_sent_at";
+
+type WaitlistRow = {
+  id: string;
+  business_name: string;
+  contact_name: string;
+  email: string;
+  country: string | null;
+  monthly_volume: string | null;
+  pain_point: string | null;
+  confirmed_at: string | null;
+  confirm_expires_at: string | null;
+  confirm_emails_sent: number;
+  last_confirm_sent_at: string | null;
+};
+
+export type JoinWaitlistResult = ActionResult<{
+  status: "check_email" | "already_confirmed";
+  email: string;
+}>;
+
+const JOIN_FAILED = "We couldn't save that. Please try again.";
+const EMAIL_FAILED =
+  "We saved your details but couldn't send the confirmation email. Please try again in a few minutes.";
+
+/** The newest row for this email. Older signups may have joined more than once. */
+async function findSignup(email: string) {
+  return supabaseAdmin()
+    .from("waitlist_signups")
+    .select(WAITLIST_ROW)
+    .eq("email", email)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+}
+
+export async function joinWaitlist(
+  input: WaitlistInput & {
+    /** Hidden field. People leave it empty; bots fill it in. */
+    website?: string;
+    /** When the form appeared, set by the browser. 0 if the script didn't run. */
+    rendered_at?: number;
+  },
+): Promise<JoinWaitlistResult> {
   const parsed = waitlistSchema.safeParse(input);
   if (!parsed.success) return invalid(parsed.error);
   if (!allowRequest("waitlist")) return { ok: false, error: RATE_LIMITED };
-
   const data = parsed.data;
-  const { error } = await supabaseAdmin().from("waitlist_signups").insert(data);
-  if (error) {
-    console.error("[waitlist] insert failed", error.message);
-    return { ok: false, error: "We couldn't save that. Please try again." };
+
+  // Bots get the normal answer so they learn nothing, but nothing is saved or sent.
+  if (
+    looksLikeABot(
+      { website: input.website, renderedAt: Number(input.rendered_at) || 0 },
+      Date.now(),
+    )
+  ) {
+    return { ok: true, status: "check_email", email: data.email };
   }
 
+  const existing = await findSignup(data.email);
+  if (existing.error) {
+    console.error("[waitlist] lookup failed", existing.error.message);
+    return { ok: false, error: JOIN_FAILED };
+  }
+
+  let row = existing.data as WaitlistRow | null;
+  if (row?.confirmed_at) return { ok: true, status: "already_confirmed", email: data.email };
+
+  if (!row) {
+    const inserted = await supabaseAdmin()
+      .from("waitlist_signups")
+      .insert(data)
+      .select(WAITLIST_ROW)
+      .single();
+    if (inserted.error) {
+      console.error("[waitlist] insert failed", inserted.error.message);
+      return { ok: false, error: JOIN_FAILED };
+    }
+    row = inserted.data as WaitlistRow;
+  } else {
+    // Signed up before but never confirmed: keep their latest details.
+    const { business_name, contact_name, country, monthly_volume, pain_point } = data;
+    const updated = await supabaseAdmin()
+      .from("waitlist_signups")
+      .update({ business_name, contact_name, country, monthly_volume, pain_point })
+      .eq("id", row.id);
+    if (updated.error) console.error("[waitlist] updating details failed", updated.error.message);
+    row = { ...row, business_name, contact_name };
+  }
+
+  return sendWaitlistConfirmation(row, requestOrigin());
+}
+
+async function sendWaitlistConfirmation(
+  row: WaitlistRow,
+  origin: string,
+): Promise<JoinWaitlistResult> {
+  const now = Date.now();
+  const allowance = confirmEmailAllowance(row, now);
+  // Over the daily limit: say the same thing, send nothing.
+  if (!allowance.send) return { ok: true, status: "check_email", email: row.email };
+
+  // A fresh link each time. Only the newest email's link works.
+  const { token, hash } = newConfirmToken();
+  const saved = await supabaseAdmin()
+    .from("waitlist_signups")
+    .update({
+      confirm_token_hash: hash,
+      confirm_expires_at: new Date(now + CONFIRM_TTL_MS).toISOString(),
+      confirm_emails_sent: allowance.sentInWindow,
+    })
+    .eq("id", row.id);
+  if (saved.error) {
+    console.error("[waitlist] saving the confirm link failed", saved.error.message);
+    return { ok: false, error: JOIN_FAILED };
+  }
+
+  const sent = await sendEmail({
+    ...waitlistConfirmEmail({
+      contactName: row.contact_name,
+      businessName: row.business_name,
+      confirmUrl: `${origin}/waitlist/confirm?token=${token}`,
+    }),
+    to: row.email,
+  });
+  if (!sent.ok) return { ok: false, error: EMAIL_FAILED };
+
+  await supabaseAdmin()
+    .from("waitlist_signups")
+    .update({
+      confirm_emails_sent: allowance.sentInWindow + 1,
+      last_confirm_sent_at: new Date().toISOString(),
+    })
+    .eq("id", row.id);
+  return { ok: true, status: "check_email", email: row.email };
+}
+
+export type ConfirmWaitlistResult =
+  | { status: "confirmed"; firstName: string }
+  | { status: "expired" }
+  | { status: "invalid" }
+  | { status: "error" };
+
+/** The link in the "Confirm my place" email. */
+export async function confirmWaitlist(token: string | undefined): Promise<ConfirmWaitlistResult> {
+  if (!isTokenShaped(token)) return { status: "invalid" };
+  const { data, error } = await supabaseAdmin()
+    .from("waitlist_signups")
+    .select(WAITLIST_ROW)
+    .eq("confirm_token_hash", hashToken(token))
+    .maybeSingle();
+  if (error) {
+    console.error("[waitlist] confirm lookup failed", error.message);
+    return { status: "error" };
+  }
+  const row = data as WaitlistRow | null;
+  if (!row || row.confirmed_at) return { status: "invalid" };
+  if (linkExpired(row, Date.now())) return { status: "expired" };
+
+  const confirmed = await supabaseAdmin()
+    .from("waitlist_signups")
+    .update({
+      confirmed_at: new Date().toISOString(),
+      confirm_token_hash: null,
+      confirm_expires_at: null,
+    })
+    .eq("id", row.id)
+    .is("confirmed_at", null)
+    .select("id");
+  if (confirmed.error) {
+    console.error("[waitlist] confirm failed", confirmed.error.message);
+    return { status: "error" };
+  }
+  // A second click raced this one and got there first.
+  if (!confirmed.data?.length) return { status: "invalid" };
+
+  const signup: WaitlistInput = {
+    business_name: row.business_name,
+    contact_name: row.contact_name,
+    email: row.email,
+    country: row.country ?? undefined,
+    monthly_volume: row.monthly_volume ?? undefined,
+    pain_point: row.pain_point ?? undefined,
+  };
   await Promise.all([
-    sendEmail({ ...waitlistConfirmation(data), to: data.email }),
-    sendToAdmin(leadAlert({ kind: "waitlist", data }), data.email),
+    sendEmail({ ...waitlistWelcome(signup), to: row.email }),
+    sendToAdmin(leadAlert({ kind: "waitlist", data: signup }), row.email),
   ]);
-  return { ok: true };
+  return { status: "confirmed", firstName: row.contact_name.split(" ")[0] || row.contact_name };
 }
 
 /* --------------------------------- contact -------------------------------- */

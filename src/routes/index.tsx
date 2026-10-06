@@ -528,7 +528,14 @@ function formValue(form: FormData, key: string) {
 
 function Waitlist() {
   const [busy, setBusy] = createSignal(false);
-  const [done, setDone] = createSignal(false);
+  const [done, setDone] = createSignal<null | {
+    status: "check_email" | "already_confirmed";
+    email: string;
+  }>(null);
+  // Spam check people never see: when the form appeared, so a form sent in
+  // under 3 seconds is ignored. The hidden "website" field is the other check.
+  let renderedAt = 0;
+  onMount(() => (renderedAt = Date.now()));
 
   async function onSubmit(e: SubmitEvent & { currentTarget: HTMLFormElement }) {
     e.preventDefault();
@@ -542,13 +549,14 @@ function Waitlist() {
         country: formValue(form, "country"),
         monthly_volume: formValue(form, "monthly_volume"),
         pain_point: formValue(form, "pain_point"),
+        website: formValue(form, "website"),
+        rendered_at: renderedAt,
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      setDone(true);
-      toast.success("You're on the list — check your inbox.");
+      setDone({ status: result.status, email: result.email });
     } catch {
       toast.error("We couldn't save that. Please try again.");
     } finally {
@@ -590,19 +598,46 @@ function Waitlist() {
           <Show
             when={!done()}
             fallback={
-              <div class="py-10 text-center">
+              <div class="py-10 text-center" role="status">
                 <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-success/15">
                   <ShieldCheck class="h-6 w-6 text-success" />
                 </div>
-                <h3 class="mt-4 text-xl font-semibold">You're on the list</h3>
-                <p class="mt-2 text-sm text-muted-foreground">
-                  A confirmation is on its way. We'll notify you the moment Meridian is ready.
-                </p>
+                <Show
+                  when={done()?.status === "check_email"}
+                  fallback={
+                    <>
+                      <h3 class="mt-4 text-xl font-semibold">You're already on the list</h3>
+                      <p class="mt-2 text-sm text-muted-foreground">
+                        We'll notify you the moment Meridian is ready.
+                      </p>
+                    </>
+                  }
+                >
+                  <h3 class="mt-4 text-xl font-semibold">Almost there</h3>
+                  <p class="mt-2 text-sm text-muted-foreground">
+                    Check your email and click{" "}
+                    <strong class="text-foreground">Confirm my place</strong>. We sent the link to{" "}
+                    <strong class="text-foreground">{done()?.email}</strong>.
+                  </p>
+                </Show>
+                <button
+                  type="button"
+                  onClick={() => setDone(null)}
+                  class="mt-5 text-sm font-medium text-primary hover:underline"
+                >
+                  Use a different email
+                </button>
               </div>
             }
           >
             <form onSubmit={onSubmit} class="space-y-4">
               <h3 class="text-lg font-semibold">Join the waitlist</h3>
+              <div aria-hidden="true" class="absolute -left-[9999px] h-px w-px overflow-hidden">
+                <label>
+                  Website
+                  <input type="text" name="website" tabindex="-1" autocomplete="off" />
+                </label>
+              </div>
               <div class="grid gap-4 sm:grid-cols-2">
                 <Field name="business_name" label="Business name" required />
                 <Field name="contact_name" label="Your name" required />
@@ -636,7 +671,10 @@ function Waitlist() {
                 {busy() ? "Adding you…" : "Get early access"}
               </button>
               <p class="text-xs text-muted-foreground">
-                We only email you about Meridian. No marketing lists.
+                We only email you about Meridian. No marketing lists.{" "}
+                <a href="/privacy" class="underline hover:text-foreground">
+                  Privacy policy
+                </a>
               </p>
             </form>
           </Show>
