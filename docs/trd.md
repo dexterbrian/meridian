@@ -128,7 +128,7 @@ All tables in `public`. All have `id uuid default gen_random_uuid()`, `created_a
 
 | Table | Change |
 |---|---|
-| `waitlist_signups` | Unchanged. |
+| `waitlist_signups` | Adds email confirmation: `confirmed_at`, `confirm_token_hash` (sha256 of the emailed token), `confirm_expires_at`, `confirm_emails_sent`, `last_confirm_sent_at`. Emails stored lower-case. Rows from before the change count as confirmed. Migration `20261006090000_waitlist_confirmation.sql`. |
 | `contact_messages` | Unchanged. |
 | `demo_transactions` | Kept for demo pages. |
 | `payment_requests` | **Replaced** by the new `payment_requests` below. Demo pages switch to `demo_transactions` only. |
@@ -735,7 +735,9 @@ Pay page sets `Content-Security-Policy: frame-ancestors *` only when `?embed=1` 
 
 | Trigger | To | Template |
 |---|---|---|
-| Waitlist / contact submit | Submitter + `ADMIN_EMAIL` | Confirmation / lead alert |
+| Waitlist submit | Submitter | "Confirm my place" link (7 days, at most 3 emails in 24 hours) |
+| Waitlist link clicked (`/waitlist/confirm`) | Submitter + `ADMIN_EMAIL` | Welcome / lead alert |
+| Contact submit | Submitter + `ADMIN_EMAIL` | Confirmation / lead alert |
 | OTP | User | Supabase handles |
 | KYB submitted | Admin | Review needed |
 | KYB decision | Business | Approved (tier, limits) or rejected (note) |
@@ -760,6 +762,7 @@ All send through one `sendEmail({to, subject, html})` in `server/email/send.ts`.
 - `PAYAZA_TRANSACTION_PIN` authorises payouts. Server only, never logged.
 - `/api/jobs/*`: `Authorization: Bearer {JOBS_SECRET}`.
 - Rate limit public inserts (waitlist, contact, pay page submit) by IP: 10 per 10 minutes, in-memory per isolate is enough for MVP.
+- Waitlist spam checks: a hidden `website` field, and forms sent under 3 seconds after the page loaded are ignored (the visitor still sees the normal message). Only confirmed signups get the welcome email or reach `ADMIN_EMAIL`.
 - Signed storage URLs, 10 minutes.
 - No PII in logs. `partner_calls.request` strips keys named `*key*`, `*secret*`, `*token*`, `*pin*`, `account_number`, `id_number`.
 - Dependencies pinned. `npm audit` in CI.
