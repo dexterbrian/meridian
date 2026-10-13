@@ -165,16 +165,27 @@ const kotani: Adapter = {
     const k = env.kotani;
     if (!k) return offline("kotani").quote(req, basis);
     const call = async (amount: number) => {
-      const r = await partnerFetch<{ data?: KotaniFiatRate }>({
+      const r = await partnerFetch<{ data?: KotaniFiatRate; message?: string }>({
         partner: "kotani",
         method: "POST",
         url: `${k.baseUrl}/rate/fiat`,
         headers: { Authorization: `Bearer ${k.apiKey}` },
         body: JSON.stringify({ from: req.from.currency, to: req.to.currency, amount }),
       });
-      return r.data?.data
-        ? kotaniQuote({ from: req.from.currency, to: req.to.currency, reply: r.data.data, basis })
-        : null;
+      // A refusal comes back as {success: false, message, data: {}} with an
+      // HTTP error, so the empty data object has to be caught by the status, not
+      // by its presence. Passing the message up lets the router show the real
+      // reason (e.g. "the 'rates' service is not enabled for this account")
+      // instead of a bare "gave no quote". Checked on 13 October 2026.
+      if (!r.ok || !r.data?.data) {
+        throw new Error(r.data?.message ?? `Kotani refused the quote (HTTP ${r.status}).`);
+      }
+      return kotaniQuote({
+        from: req.from.currency,
+        to: req.to.currency,
+        reply: r.data.data,
+        basis,
+      });
     };
     if (req.side === "send") return call(req.amount);
     // Kotani quotes from the source amount. Probe once, then scale to land on the receive amount.

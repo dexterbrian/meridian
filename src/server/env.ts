@@ -71,11 +71,17 @@ export const env = {
   // Routed providers (src/lib/providers.ts). A provider without its keys gives
   // sandbox estimates and simulated execution in sandbox mode, and is skipped in live.
   get kotani() {
-    const apiKey = read("KOTANI_API_KEY");
+    // The dashboard issues a key pair. The key goes in Authorization: Bearer
+    // (v3 does not sign requests); the secret signs their webhooks. The older
+    // KOTANI_API_KEY name still works.
+    const apiKey = read("KOTANI_PAY_PUBLIC_KEY") ?? read("KOTANI_API_KEY");
     return apiKey
       ? {
           apiKey,
-          baseUrl: (read("KOTANI_BASE_URL") ?? "https://sandbox-api.kotanipay.io/api/v3").replace(
+          // Checked against the live sandbox on 13 October 2026: the host is
+          // kotanipay.com, not .io, and v3 routes sit under /api/v3. Kotani gives
+          // each account its own environment URLs, so this is only a default.
+          baseUrl: (read("KOTANI_BASE_URL") ?? "https://sandbox-api.kotanipay.com/api/v3").replace(
             /\/+$/,
             "",
           ),
@@ -133,7 +139,9 @@ export const env = {
   // be checked) whatever else is configured. Yellow Card signs with the API
   // key's own secret, so it has none of its own.
   get kotaniWebhookSecret() {
-    return read("KOTANI_WEBHOOK_SECRET");
+    // The key pair's secret is what signs Kotani's webhooks, unless the
+    // dashboard issued a separate webhook secret.
+    return read("KOTANI_WEBHOOK_SECRET") ?? read("KOTANI_PAY_SECRET_KEY");
   },
   get minisendWebhookSecret() {
     return read("MINISEND_WEBHOOK_SECRET");
