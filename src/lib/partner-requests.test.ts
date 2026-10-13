@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   klashaBeneficiaryBody,
   klashaQuote,
+  kotaniNetwork,
   kotaniOfframpBody,
   kotaniPayoutBody,
   kotaniQuote,
@@ -116,6 +117,14 @@ describe("quote parsers", () => {
     expect(q).toMatchObject({ sendAmount: 102.5, receiveAmount: 12720, estimated: false });
   });
 
+  it("Kotani: a refusal shaped like a reply gives no quote, not NaN", () => {
+    // Its sandbox answers {success: false, message, data: {}} when a service is
+    // off, so the amounts arrive undefined.
+    expect(
+      kotaniQuote({ from: "GHS", to: "KES", basis: "documented", reply: {} as never }),
+    ).toBeNull();
+  });
+
   it("Minisend: USDC in, local currency out, with the quote's expiry", () => {
     const q = minisendQuote({
       basis: "documented",
@@ -180,6 +189,14 @@ describe("payout bodies", () => {
       kotaniPayoutBody({ ...momo, rail: "bank", bankCode: "01" }, 1000, "MRDK-2", "https://x/cb")
         .path,
     ).toBe("/withdraw/v2/bank");
+  });
+
+  it("Kotani: keeps Vodacom and Vodafone apart", () => {
+    // Different networks: Vodacom is Tanzania, DRC and South Africa; Vodafone is Ghana.
+    expect(kotaniNetwork("Vodacom")).toBe("VODACOM");
+    expect(kotaniNetwork("vodafone")).toBe("VODAFONE");
+    expect(kotaniNetwork("M-Pesa")).toBe("MPESA");
+    expect(kotaniNetwork("Wave")).toBe("WAVE");
   });
 
   it("Kotani: USDC offramp on Base pays M-Pesa directly", () => {

@@ -167,6 +167,31 @@ describe("estimates and costs", () => {
 });
 
 describe("rankQuotes: cheapest first, the rest as fallbacks", () => {
+  it("drops a quote whose amounts are not real numbers, so it cannot win", () => {
+    const junk: RouteQuote = {
+      provider: "kotani",
+      sendCurrency: "GHS",
+      sendAmount: NaN,
+      receiveCurrency: "KES",
+      receiveAmount: NaN,
+      cost: NaN,
+      costPct: NaN,
+      estimated: false,
+      basis: "documented",
+      expiresAt: null,
+    };
+    const good: RouteQuote = {
+      ...junk,
+      provider: "minisend",
+      sendAmount: 15588.14,
+      receiveAmount: 129000,
+      cost: 100,
+      costPct: 0.006,
+    };
+    const ranked = rankQuotes([junk, good], "receive");
+    expect(ranked.map((q) => q.provider)).toEqual(["minisend"]);
+  });
+
   const base = {
     sendCurrency: "KES",
     receiveCurrency: "KES",

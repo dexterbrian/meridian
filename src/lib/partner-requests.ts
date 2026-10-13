@@ -121,7 +121,15 @@ export function kotaniQuote(input: {
   to: string;
   reply: KotaniFiatRate;
   basis: Basis;
-}): RouteQuote {
+}): RouteQuote | null {
+  // A refusal still answers with an empty data object, so the amounts arrive
+  // undefined. Checked against Kotani's sandbox on 13 October 2026.
+  if (
+    !Number.isFinite(Number(input.reply.depositTransactionAmount)) ||
+    !Number.isFinite(Number(input.reply.withdrawalTransactionAmount))
+  ) {
+    return null;
+  }
   return withCost({
     provider: "kotani",
     sendCurrency: input.from,
@@ -302,10 +310,20 @@ export function kotaniOfframpBody(input: {
 /** Kotani's offramp names networks MPESA, MTN, AIRTEL or VODAFONE. */
 export function kotaniNetwork(network: string | undefined): string | undefined {
   if (!network) return undefined;
+  // The names Kotani's own country list returns, read on 13 October 2026.
+  // Vodacom (Tanzania, DRC, South Africa) and Vodafone (Ghana) are different
+  // networks, so Vodacom has to be matched first.
   if (/mpesa|m-pesa|saf/i.test(network)) return "MPESA";
+  if (/vodacom/i.test(network)) return "VODACOM";
+  if (/vodafone|telecel/i.test(network)) return "VODAFONE";
   if (/airtel/i.test(network)) return "AIRTEL";
   if (/mtn/i.test(network)) return "MTN";
-  if (/voda/i.test(network)) return "VODAFONE";
+  if (/orange/i.test(network)) return "ORANGE";
+  if (/moov/i.test(network)) return "MOOV";
+  if (/wave/i.test(network)) return "WAVE";
+  if (/tigo|mixx|yas/i.test(network)) return "TIGO";
+  if (/zamtel/i.test(network)) return "ZAMTEL";
+  if (/cell\s?c/i.test(network)) return "CELLC";
   return network.toUpperCase();
 }
 

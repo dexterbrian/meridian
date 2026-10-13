@@ -140,6 +140,20 @@ export function withCost(q: Omit<RouteQuote, "cost" | "costPct">): RouteQuote {
   return { ...q, cost, costPct: q.sendAmount > 0 ? cost / q.sendAmount : 0 };
 }
 
+/**
+ * A quote is only usable if both amounts are real, positive numbers. A provider
+ * that answers oddly (a refusal shaped like a reply, a missing field) must never
+ * win the ranking just because its amount parsed as NaN.
+ */
+export function isUsableQuote(q: RouteQuote): boolean {
+  return (
+    Number.isFinite(q.sendAmount) &&
+    Number.isFinite(q.receiveAmount) &&
+    q.sendAmount > 0 &&
+    q.receiveAmount > 0
+  );
+}
+
 const ORDER = new Map(PROVIDERS.map((p, i) => [p.id, i]));
 
 /**
@@ -148,7 +162,7 @@ const ORDER = new Map(PROVIDERS.map((p, i) => [p.id, i]));
  * so the result is deterministic.
  */
 export function rankQuotes(quotes: RouteQuote[], side: Side): RouteQuote[] {
-  return [...quotes].sort((a, b) => {
+  return quotes.filter(isUsableQuote).sort((a, b) => {
     const primary =
       side === "receive" ? a.sendAmount - b.sendAmount : b.receiveAmount - a.receiveAmount;
     if (Math.abs(primary) > 0.004) return primary;
