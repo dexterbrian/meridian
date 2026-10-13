@@ -26,6 +26,7 @@ for (const file of [".env.local", ".env"]) {
 process.env["MERIDIAN_MODE"] = "sandbox";
 
 const { ADAPTERS } = await import("../src/server/partners/adapters");
+const { env } = await import("../src/server/env");
 const { planRoute } = await import("../src/server/money/router");
 import type { ProviderId } from "../src/lib/providers";
 import type { RouteRequest } from "../src/lib/routing";
@@ -65,6 +66,39 @@ const CHECKS: { provider: ProviderId; why: string; req: RouteRequest }[] = [
 ];
 
 let failed = 0;
+
+// Can we reach the provider at all, and is the key accepted? Read-only.
+const REACH: { provider: ProviderId; url: () => string | null }[] = [
+  {
+    provider: "kotani",
+    url: () => (env.kotani ? `${env.kotani.baseUrl}/customer/support/countries` : null),
+  },
+];
+for (const r of REACH) {
+  const url = r.url();
+  if (!url) continue;
+  const key = env.kotani?.apiKey ?? "";
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${key}` } }).catch(
+    (e) => e as Error,
+  );
+  if (res instanceof Error) {
+    failed++;
+    console.log(`FAIL ${r.provider} unreachable: ${res.message}`);
+  } else if (res.status === 401) {
+    failed++;
+    console.log(
+      `FAIL ${r.provider}: key rejected (401). Check the key and that KOTANI_BASE_URL is the environment Kotani gave you.`,
+    );
+  } else if (!res.ok) {
+    failed++;
+    console.log(`FAIL ${r.provider}: HTTP ${res.status} on ${new URL(url).pathname}`);
+  } else {
+    const body = (await res.json().catch(() => null)) as { data?: unknown[] } | null;
+    const n = Array.isArray(body?.data) ? body.data.length : 0;
+    console.log(`ok   ${r.provider} reachable and key accepted (${n} supported countries)`);
+  }
+}
+
 for (const c of CHECKS) {
   const a = ADAPTERS[c.provider];
   if (!a.configured()) {
@@ -79,8 +113,15 @@ for (const c of CHECKS) {
       `ok   ${c.provider} (${c.why}): pay ${q.sendAmount} ${q.sendCurrency} → ${q.receiveAmount} ${q.receiveCurrency}`,
     );
   } catch (e) {
-    failed++;
-    console.log(`FAIL ${c.provider} (${c.why}): ${e instanceof Error ? e.message : String(e)}`);
+    const message = e instanceof Error ? e.message : String(e);
+    // A provider can answer correctly and still refuse: the account may not have
+    // the service switched on. That is for the provider to enable, not a bug here.
+    if (/not enabled for this account/i.test(message)) {
+      console.log(`todo ${c.provider} (${c.why}): ${message}`);
+    } else {
+      failed++;
+      console.log(`FAIL ${c.provider} (${c.why}): ${message}`);
+    }
   }
 }
 

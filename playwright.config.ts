@@ -34,10 +34,20 @@ export default defineConfig({
       PAYAZA_SIMULATE_PAYOUTS: "true",
       // No emails from test runs.
       RESEND_API_KEY: "",
-      // No provider keys: every routed provider gives estimates and simulated execution.
+      // No provider keys: every routed provider gives estimates and simulated
+      // execution, so a run never depends on a live provider account. Every
+      // credential name env.ts reads has to be cleared here, or a key in
+      // .env.local leaks in and the prices stop being predictable.
       KOTANI_API_KEY: "",
+      KOTANI_PAY_PUBLIC_KEY: "",
+      KOTANI_PAY_SECRET_KEY: "",
+      KOTANI_WEBHOOK_SECRET: "",
       YELLOWCARD_API_KEY: "",
+      YELLOWCARD_SECRET: "",
       KLASHA_USERNAME: "",
+      KLASHA_PASSWORD: "",
+      KLASHA_PUBLIC_KEY: "",
+      KLASHA_ENCRYPTION_KEY: "",
       MINISEND_API_KEY: "",
     },
   },
