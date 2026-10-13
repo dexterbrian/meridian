@@ -90,20 +90,28 @@ export const PROVIDERS: ProviderProfile[] = [
     // POST /rate/fiat quotes fiat-to-fiat with a fee on each leg; offramp turns USDC/USDT into fiat.
     converts: true,
     docs: "https://documentation.kotanipay.com/v3/overview",
+    // Read from Kotani's own GET /customer/support/countries on 13 October 2026
+    // (12 countries, each listed for both deposit and withdraw), so these are
+    // documented, not guessed. Nigeria is not among them: Kotani does not
+    // collect or pay NGN. Networks: "BKTRX" is a bank rail, "CHECKOUT" a
+    // hosted card page, so those two currencies add bank and card collection.
     collect: [
-      cov("KES", ["KE"], ["momo"]), cov("GHS", ["GH"], ["momo"]), cov("UGX", ["UG"], ["momo"]),
-      cov("TZS", ["TZ"], ["momo"]), cov("ZMW", ["ZM"], ["momo"]), cov("RWF", ["RW"], ["momo"], "assumed"),
-      cov("XOF", ["CI", "SN"], ["momo"], "assumed"), cov("XAF", ["CM"], ["momo"], "assumed"),
-      cov("NGN", ["NG"], ["momo"], "assumed"),
-      cov("ZAR", ["ZA"], ["bank", "card"]),
+      cov("KES", ["KE"], ["momo", "bank", "card"]), cov("GHS", ["GH"], ["momo"]),
+      cov("UGX", ["UG"], ["momo"]), cov("TZS", ["TZ"], ["momo"]),
+      cov("ZMW", ["ZM"], ["momo"]), cov("RWF", ["RW"], ["momo"]),
+      cov("XOF", ["CI", "SN"], ["momo"]), cov("XAF", ["CM"], ["momo"]),
+      cov("CDF", ["CD"], ["momo"]), cov("SLE", ["SL"], ["momo"]),
+      cov("ZAR", ["ZA"], ["momo", "bank", "card"]),
       // On-chain deposit / offramp: a payer anywhere sends USDC or USDT.
       cov("USD", any, ["stablecoin"]),
     ],
     payout: [
-      cov("KES", ["KE"], ["momo", "bank"]), cov("GHS", ["GH"], ["momo"]), cov("UGX", ["UG"], ["momo"]),
-      cov("TZS", ["TZ"], ["momo"]), cov("ZMW", ["ZM"], ["momo"]), cov("RWF", ["RW"], ["momo"], "assumed"),
-      cov("XOF", ["CI", "SN"], ["momo"], "assumed"), cov("XAF", ["CM"], ["momo"], "assumed"),
-      cov("NGN", ["NG"], ["bank"]), cov("ZAR", ["ZA"], ["bank"]),
+      cov("KES", ["KE"], ["momo", "bank"]), cov("GHS", ["GH"], ["momo"]),
+      cov("UGX", ["UG"], ["momo"]), cov("TZS", ["TZ"], ["momo"]),
+      cov("ZMW", ["ZM"], ["momo"]), cov("RWF", ["RW"], ["momo"]),
+      cov("XOF", ["CI", "SN"], ["momo"]), cov("XAF", ["CM"], ["momo"]),
+      cov("CDF", ["CD"], ["momo"]), cov("SLE", ["SL"], ["momo"]),
+      cov("ZAR", ["ZA"], ["momo", "bank"]),
     ],
   },
   {
