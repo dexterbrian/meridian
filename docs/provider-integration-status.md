@@ -110,18 +110,27 @@ margin, and that margin is lower than everything else we have.
 - **It fills the gap Yellow Card alone covers.** Euros, pounds and dollars are
   the money Chris's European and Middle Eastern buyers pay in, and only Yellow
   Card does that today. A second provider there means a backup, and competition.
+- **Euro collection is real.** Eversend gives a European IBAN that a buyer in
+  the eurozone can pay into
+  ([their announcement](https://blog.eversend.co/eversend-virtual-euro-bank-accounts),
+  confirmed 14 October 2026). So Chris's European buyers can pay by ordinary
+  bank transfer, not only stablecoin. One condition matters for routing: **the
+  money must come from a registered business's account. A payment from a private
+  individual is rejected and returned.** Our exporters invoice companies, so that
+  fits, but a euro route through Eversend must not be offered to an individual
+  payer. Yellow Card has no such restriction documented.
 - **It is African.** Eversend is Ugandan, which sits well with what Meridian is.
 
 ### Where it does not help
 
 - **No yen and no yuan.** Phillip's Japanese car exporters and McLoud's Chinese
   suppliers still need Klasha. Eversend does not replace it.
-- **Collecting euros from abroad is unconfirmed.** Euros, pounds and dollars
-  appear in their collection list, but their page only explains cross-border
-  collection by stablecoin. Their 0.49% plus about €0.99 incoming charge is
-  published for their own business accounts, not for the developer product. **To
-  ask them: can a buyer in Germany pay us by SEPA transfer through the API, and
-  at what price?**
+- **Euro accounts are confirmed for their app, not yet for the API.** The IBAN
+  above is described for the Eversend app, and that page says nothing about
+  developer access. Their 0.49% plus about €0.99 incoming charge is published
+  for their own business accounts, not for the developer product. **To ask them:
+  can we open a euro IBAN per payment request through the API, at what price,
+  and is the business-sender-only rule the same there?**
 - **Money must sit with them.** Payouts come from a balance paid up front, the
   same operational problem we already have with Klasha and Minisend, until their
   pay-as-you-go funding ships.
@@ -135,6 +144,9 @@ margin, and that margin is lower than everything else we have.
 ### Suggested next step
 
 Sign up at `business.eversend.co/signup`, ask sales for developer pricing and
-whether euro collection works through the API, then add it as a sixth provider.
-Adding it is a small job: one coverage entry and one adapter, which is the point
-of the single-provider routing design.
+whether the euro IBAN can be opened through the API, then add it as a sixth
+provider. Adding it is a small job: one coverage entry and one adapter, which is
+the point of the single-provider routing design.
+
+When it goes in, the euro entry needs the business-sender rule attached, so a
+euro route through Eversend is never offered to a payer who is an individual.
