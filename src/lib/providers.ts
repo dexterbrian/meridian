@@ -189,6 +189,27 @@ export const PROVIDERS: ProviderProfile[] = [
 
 export const PROVIDER_IDS = PROVIDERS.map((p) => p.id);
 
+/**
+ * The providers Meridian may route money through today.
+ *
+ * The registry above keeps every provider we have built. A provider only joins
+ * this list once its account is open and its keys work, because offering a payer
+ * a way to pay that we cannot actually carry is worse than not offering it.
+ * Routing, the ways a payer can pay, and the destinations a business can send to
+ * all read this list, so this one line is the whole switch.
+ *
+ * On now: Payaza, which carries same-currency payments and always has, and
+ * Kotani Pay. Yellow Card, Klasha and Minisend are built, unit-tested and ready;
+ * they are off until their business checks and sandbox keys are done. To turn
+ * one back on, add its id here. Nothing else changes.
+ */
+export const ENABLED_PROVIDERS: readonly ProviderId[] = ["payaza", "kotani"];
+
+/** The switched-on providers, or an explicit set (coverage tests and docs pass the full registry). */
+function switchedOn(only: readonly ProviderId[]): ProviderProfile[] {
+  return PROVIDERS.filter((p) => only.includes(p.id));
+}
+
 export function provider(id: ProviderId): ProviderProfile {
   const p = PROVIDERS.find((x) => x.id === id);
   if (!p) throw new Error(`Unknown provider ${id}`);
@@ -215,10 +236,17 @@ export type RouteMatch = {
   basis: Basis;
 };
 
-/** Providers that can carry a payment from `from` to `to` on their own, in registry order. */
-export function providersFor(from: Endpoint, to: Endpoint): RouteMatch[] {
+/**
+ * Providers that can carry a payment from `from` to `to` on their own, in
+ * registry order. Only the switched-on ones, unless `only` says otherwise.
+ */
+export function providersFor(
+  from: Endpoint,
+  to: Endpoint,
+  only: readonly ProviderId[] = ENABLED_PROVIDERS,
+): RouteMatch[] {
   const out: RouteMatch[] = [];
-  for (const p of PROVIDERS) {
+  for (const p of switchedOn(only)) {
     const c = covers(p.collect, from);
     const d = covers(p.payout, to);
     if (!c || !d) continue;
@@ -232,18 +260,25 @@ export function providersFor(from: Endpoint, to: Endpoint): RouteMatch[] {
 }
 
 /** Rails a payer in `currency` (and `country`) can use with any provider that pays out to `to`. */
-export function payerRails(currency: string, country: string | undefined, to: Endpoint): Rail[] {
+export function payerRails(
+  currency: string,
+  country: string | undefined,
+  to: Endpoint,
+  only: readonly ProviderId[] = ENABLED_PROVIDERS,
+): Rail[] {
   const rails = new Set<Rail>();
   for (const r of ["momo", "bank", "card", "virtual_account", "stablecoin", "wallet"] as Rail[]) {
-    if (providersFor({ currency, rail: r, country }, to).length > 0) rails.add(r);
+    if (providersFor({ currency, rail: r, country }, to, only).length > 0) rails.add(r);
   }
   return [...rails];
 }
 
 /** Every currency some provider can pay out, with the countries and rails for each. */
-export function payoutDestinations(): { currency: string; country: string; rails: Rail[] }[] {
+export function payoutDestinations(
+  only: readonly ProviderId[] = ENABLED_PROVIDERS,
+): { currency: string; country: string; rails: Rail[] }[] {
   const map = new Map<string, Set<Rail>>();
-  for (const p of PROVIDERS) {
+  for (const p of switchedOn(only)) {
     for (const c of p.payout) {
       for (const country of c.countries) {
         const key = `${c.currency}|${country}`;
@@ -280,15 +315,18 @@ const FIRST = ["USD", "EUR", "GBP"];
  * left out; the pay page offers it through Payaza already. International options
  * (USD, EUR, GBP) come first.
  */
-export function payerOptions(to: Endpoint): PayerOption[] {
+export function payerOptions(
+  to: Endpoint,
+  only: readonly ProviderId[] = ENABLED_PROVIDERS,
+): PayerOption[] {
   const seen = new Map<string, PayerOption>();
-  for (const p of PROVIDERS) {
+  for (const p of switchedOn(only)) {
     for (const c of p.collect) {
       if (c.currency === to.currency) continue;
       for (const rail of c.rails) {
         const option: PayerOption = { currency: c.currency, rail, country: c.countries[0] };
         const key = `${c.currency}|${rail}`;
-        if (seen.has(key) || providersFor(option, to).length === 0) continue;
+        if (seen.has(key) || providersFor(option, to, only).length === 0) continue;
         seen.set(key, option);
       }
     }
@@ -307,9 +345,12 @@ export function payerOptions(to: Endpoint): PayerOption[] {
  * ones open anywhere (a USD/EUR/GBP account abroad, USDC). Cards are left out:
  * businesses fund transfers from accounts.
  */
-export function funderOptions(country: string): PayerOption[] {
+export function funderOptions(
+  country: string,
+  only: readonly ProviderId[] = ENABLED_PROVIDERS,
+): PayerOption[] {
   const seen = new Map<string, PayerOption>();
-  for (const p of PROVIDERS) {
+  for (const p of switchedOn(only)) {
     if (p.id === "payaza") continue; // Payaza doesn't convert, so it can't fund a routed transfer.
     for (const c of p.collect) {
       if (c.countries.length > 0 && !c.countries.includes(country)) continue;

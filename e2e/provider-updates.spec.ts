@@ -2,21 +2,24 @@ import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
 
-// Provider webhooks and transfer checks. The test server knows the Minisend
-// webhook secret (playwright.config.ts), so these tests can sign a webhook the
-// way Minisend does.
+// Provider webhooks and transfer checks, through Kotani Pay: the only routed
+// provider switched on (ENABLED_PROVIDERS in src/lib/providers.ts). The test
+// server knows the Kotani webhook secret (playwright.config.ts), so these tests
+// can sign a webhook the way Kotani does.
 
-const SECRET = "e2e-minisend-secret";
+const SECRET = "e2e-kotani-secret";
 const data = () =>
   JSON.parse(readFileSync("e2e/.auth/data.json", "utf8")) as { requests: string[] };
 
-function signed(body: object) {
+/** Kotani signs the hex HMAC of {event, data}, prefixed "sha256=". */
+function signed(body: { event: string; data: Record<string, unknown> }, secret = SECRET) {
   const raw = JSON.stringify(body);
-  const t = Math.floor(Date.now() / 1000);
-  const v1 = createHmac("sha256", SECRET).update(`${t}.${raw}`).digest("hex");
+  const signature = createHmac("sha256", secret)
+    .update(JSON.stringify({ event: body.event, data: body.data }))
+    .digest("hex");
   return {
     raw,
-    headers: { "content-type": "application/json", "x-minisend-signature-v2": `t=${t},v1=${v1}` },
+    headers: { "content-type": "application/json", "x-kotani-signature": `sha256=${signature}` },
   };
 }
 
@@ -28,7 +31,7 @@ async function clickUntil(page: Page, button: string, visible: string) {
 }
 
 test.describe("provider webhooks", () => {
-  test("a signed Minisend webhook settles a USDC payment; a forged one is refused", async ({
+  test("a signed Kotani webhook settles a USDC payment; a forged one is refused", async ({
     page,
   }) => {
     await page.goto(`/pay/${data().requests[2]}`);
@@ -40,12 +43,12 @@ test.describe("provider webhooks", () => {
     await page.getByLabel("Currency and way to pay").selectOption({ label: "USD · USDC / USDT" });
     await expect(page.getByTestId("route-quote").first()).toHaveAttribute(
       "data-provider",
-      "minisend",
+      "kotani",
     );
     await page.getByLabel("Your name").fill("Aiko Tanaka");
     await page.getByLabel("Email").fill("aiko@example.test");
-    await page.getByRole("button", { name: /with Minisend$/ }).click();
-    await expect(page.getByTestId("routed-payin")).toContainText("Carried by Minisend");
+    await page.getByRole("button", { name: /with Kotani Pay$/ }).click();
+    await expect(page.getByTestId("routed-payin")).toContainText("Carried by Kotani Pay");
 
     const attempt = new URL(page.url()).searchParams.get("attempt");
     expect(attempt).toBeTruthy();
@@ -54,32 +57,29 @@ test.describe("provider webhooks", () => {
       .first()
       .textContent())!.trim();
 
+    // An offramp takes the payer's USDC and pays the recipient in one order.
     const body = {
       event: "offramp.completed",
-      order_id: `order-${Date.now()}`,
-      external_reference: reference,
-      status: "completed",
-      amount_usdc: 1015.18,
-      payout_currency: "KES",
+      data: {
+        reference_id: reference,
+        status: "completed",
+        id: `kot-${Date.now()}`,
+      },
     };
 
     // Wrong secret: refused, nothing moves.
-    const forged = await page.request.post("/api/webhooks/minisend", {
-      data: JSON.stringify(body),
-      headers: {
-        "content-type": "application/json",
-        "x-minisend-signature": createHmac("sha256", "not-the-secret")
-          .update(JSON.stringify(body))
-          .digest("hex"),
-      },
+    const bad = signed(body, "not-the-secret");
+    const forged = await page.request.post("/api/webhooks/kotani", {
+      data: bad.raw,
+      headers: bad.headers,
     });
     expect(forged.status()).toBe(401);
 
     const { raw, headers } = signed(body);
-    const ok = await page.request.post("/api/webhooks/minisend", { data: raw, headers });
+    const ok = await page.request.post("/api/webhooks/kotani", { data: raw, headers });
     expect(ok.status()).toBe(200);
     // The same event again changes nothing.
-    const again = await page.request.post("/api/webhooks/minisend", { data: raw, headers });
+    const again = await page.request.post("/api/webhooks/kotani", { data: raw, headers });
     expect(await again.json()).toMatchObject({ result: "duplicate" });
 
     await expect(page.getByRole("heading", { name: "Paid and settled" })).toBeVisible();
@@ -98,23 +98,23 @@ test.describe("checks on supplier transfers", () => {
       await expect(page.getByTestId("recipient-form")).toBeVisible({ timeout: 1000 });
     }).toPass({ timeout: 30_000 });
     const form = page.getByTestId("recipient-form");
-    await form.getByLabel("Recipient name").fill("Guangzhou Machinery Ltd");
-    await form.getByLabel("Country").selectOption({ label: "China" });
-    await form.getByLabel("Account number").fill("6222000099998888");
-    await form.getByLabel("SWIFT code").fill("ICBKCNBJ");
-    await form.getByLabel("Address").fill("8 Harbour Road");
+    await form.getByLabel("Recipient name").fill("Kumasi Machinery Ltd");
+    await form.getByLabel("Country").selectOption({ label: "Ghana" });
+    await form.getByLabel("Paid by").selectOption({ label: "Mobile money" });
+    await form.getByLabel("Account number").fill("233244999888");
+    await form.getByLabel("Network").fill("MTN");
     await form.getByRole("button", { name: "Save recipient" }).click();
     await expect(page.getByLabel("Recipient", { exact: true })).toHaveValue(/[0-9a-f-]{36}/);
 
-    // CN¥100,000 is about USD 13,900: over the USD 10,000 line, to a recipient never paid before.
-    await page.getByLabel("Amount the recipient gets").fill("100000");
+    // GH₵200,000 is about USD 13,200: over the USD 10,000 line, to a recipient never paid before.
+    await page.getByLabel("Amount the recipient gets").fill("200000");
     await page.getByLabel("Pay from").selectOption("KES|momo");
     await page.getByRole("button", { name: "Compare prices" }).click();
-    await page.getByRole("button", { name: /with Klasha$/ }).click();
+    await page.getByRole("button", { name: /with Kotani Pay$/ }).click();
     await page.getByRole("button", { name: "Simulate my payment (sandbox)" }).click();
 
     const panel = page.getByTestId("transfer-panel");
     await expect(panel).toContainText("Under review");
-    await expect(panel).toContainText("Meridian checks it before Guangzhou Machinery Ltd is paid");
+    await expect(panel).toContainText("Meridian checks it before Kumasi Machinery Ltd is paid");
   });
 });

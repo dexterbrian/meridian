@@ -1,9 +1,11 @@
 import { readFileSync } from "node:fs";
 import { expect, test, type Page } from "@playwright/test";
+import { ENABLED_PROVIDERS } from "../src/lib/providers";
 
-// The dev server for these tests runs with PARTNER_SIMULATE_FAIL=yellowcard
-// (playwright.config.ts), so any payment where Yellow Card is cheapest must fall
-// back to the next provider.
+// Kotani Pay is the only routed provider switched on (ENABLED_PROVIDERS in
+// src/lib/providers.ts), so these tests follow a payment it carries on its own
+// and check that nothing a switched-off provider would carry is ever offered.
+// The tests for a second provider taking over come back with that provider.
 
 /** Clicks until the page reacts: the first load of a dev server can be slow to hydrate. */
 async function clickUntil(page: Page, button: string, visible: string) {
@@ -24,7 +26,7 @@ test.describe("public pages", () => {
 });
 
 test.describe("paying a KES request in another currency", () => {
-  test("a payer abroad pays in USDC through the cheapest provider; the business gets the exact amount", async ({
+  test("a payer abroad pays in USDC through Kotani; the business gets the exact amount", async ({
     page,
   }) => {
     await page.goto(`/pay/${data().requests[0]}`);
@@ -36,45 +38,39 @@ test.describe("paying a KES request in another currency", () => {
 
     await page.getByLabel("Currency and way to pay").selectOption({ label: "USD · USDC / USDT" });
     const quotes = page.getByTestId("route-quote");
-    // Minisend and Kotani both turn USDC into M-Pesa shillings. Minisend's fees are lower.
-    await expect(quotes.first()).toHaveAttribute("data-provider", "minisend");
-    await expect(quotes.first()).toContainText("Cheapest");
-    await expect(quotes.nth(1)).toHaveAttribute("data-provider", "kotani");
-    await expect(quotes.nth(1)).toContainText("Backup 1");
+    await expect(quotes).toHaveCount(1);
+    await expect(quotes.first()).toHaveAttribute("data-provider", "kotani");
+    // One provider, so there is nothing to call cheapest.
+    await expect(quotes.first()).not.toContainText("Cheapest");
     await expect(quotes.first()).toContainText("KES 129,000.00 arrives");
 
     await page.getByLabel("Your name").fill("Hans Müller");
     await page.getByLabel("Email").fill("hans@example.test");
-    await page.getByRole("button", { name: /^Pay .* with Minisend$/ }).click();
+    await page.getByRole("button", { name: /^Pay .* with Kotani Pay$/ }).click();
 
     const box = page.getByTestId("routed-payin");
     await expect(box).toContainText("USDC");
-    await expect(box).toContainText("Carried by Minisend");
+    await expect(box).toContainText("Carried by Kotani Pay");
     await page.getByRole("button", { name: "Simulate the payment arriving" }).click();
     await expect(page.getByRole("heading", { name: "Paid and settled" })).toBeVisible();
     await expect(page.getByText("KES 129,000.00 reached Kilimo Fresh Exports Ltd")).toBeVisible();
   });
 
-  test("when the only provider for a route is down, the payer is told and nothing is charged", async ({
-    page,
-  }) => {
+  test("a payer is only offered currencies a switched-on provider can take", async ({ page }) => {
     await page.goto(`/pay/${data().requests[1]}`);
     await clickUntil(
       page,
       "Paying from abroad or in another currency?",
       "No provider collects yen or yuan yet",
     );
-    await page
-      .getByLabel("Currency and way to pay")
-      .selectOption({ label: "EUR · International bank transfer" });
-    const quotes = page.getByTestId("route-quote");
-    await expect(quotes).toHaveCount(1);
-    await expect(quotes.first()).toHaveAttribute("data-provider", "yellowcard");
-
-    await page.getByLabel("Your name").fill("Marie Dubois");
-    await page.getByLabel("Email").fill("marie@example.test");
-    await page.getByRole("button", { name: /with Yellow Card$/ }).click();
-    await expect(page.getByText("No provider could take this payment right now")).toBeVisible();
+    const choices = page.getByLabel("Currency and way to pay");
+    // Euros from abroad are Yellow Card's, and it is switched off.
+    await expect(choices.getByRole("option", { name: /^EUR/ })).toHaveCount(0);
+    // What Kotani collects is there: dollars on-chain, and cedis by mobile money.
+    await expect(choices.getByRole("option", { name: "USD · USDC / USDT" })).toHaveCount(1);
+    await expect(choices.getByRole("option", { name: /^GHS · Mobile money/ })).toHaveCount(1);
+    // The note about yen and yuan names a way to pay that actually works today.
+    await expect(page.getByText("Pay in USD instead: usdc / usdt.")).toBeVisible();
   });
 });
 
@@ -83,7 +79,17 @@ test.describe("sending money to suppliers", () => {
 
   async function addRecipient(
     page: Page,
-    r: { name: string; country: string; account: string; swift?: string; iban?: string },
+    r: {
+      name: string;
+      country: string;
+      currency?: string;
+      method?: string;
+      account: string;
+      network?: string;
+      swift?: string;
+      iban?: string;
+      address?: string;
+    },
   ) {
     await expect(async () => {
       await page.getByRole("button", { name: "New" }).click();
@@ -92,10 +98,14 @@ test.describe("sending money to suppliers", () => {
     const form = page.getByTestId("recipient-form");
     await form.getByLabel("Recipient name").fill(r.name);
     await form.getByLabel("Country").selectOption({ label: r.country });
+    if (r.currency) await form.getByLabel("Currency").selectOption(r.currency);
+    if (r.method) await form.getByLabel("Paid by").selectOption({ label: r.method });
     await form.getByLabel("Account number").fill(r.account);
+    if (r.network) await form.getByLabel("Network").fill(r.network);
     if (r.swift) await form.getByLabel("SWIFT code").fill(r.swift);
     if (r.iban) await form.getByLabel("IBAN").fill(r.iban);
-    await form.getByLabel("Address").fill("1 Industrial Road");
+    // The address field is only asked for abroad, where wires need it.
+    if (r.address) await form.getByLabel("Address").fill(r.address);
     await form.getByRole("button", { name: "Save recipient" }).click();
     await expect(page.getByLabel("Recipient", { exact: true })).toHaveValue(/[0-9a-f-]{36}/);
   }
@@ -106,73 +116,48 @@ test.describe("sending money to suppliers", () => {
     await expect(page.getByRole("heading", { name: "Send money" })).toBeVisible();
   });
 
-  test("pays a supplier in China in yuan through Klasha", async ({ page }) => {
+  test("pays a supplier in Ghana in cedis through Kotani", async ({ page }) => {
     await page.goto("/app/send");
     await addRecipient(page, {
-      name: "Shenzhen Tools Co",
-      country: "China",
-      account: "6222000011112222",
-      swift: "ICBKCNBJ",
-    });
-    await page.getByLabel("Amount the recipient gets").fill("50000");
-    await page.getByLabel("Pay from").selectOption("KES|momo");
-    await page.getByRole("button", { name: "Compare prices" }).click();
-
-    const quotes = page.getByTestId("route-quote");
-    await expect(quotes).toHaveCount(1);
-    await expect(quotes.first()).toHaveAttribute("data-provider", "klasha");
-    await expect(quotes.first()).toContainText("CN¥50,000.00 arrives");
-
-    await page.getByRole("button", { name: /^Send CN¥50,000\.00 with Klasha$/ }).click();
-    const panel = page.getByTestId("transfer-panel");
-    await expect(panel).toContainText("Waiting for payment");
-    await expect(page.getByTestId("routed-payin")).toContainText("Carried by Klasha");
-    await page.getByRole("button", { name: "Simulate my payment (sandbox)" }).click();
-    await expect(panel).toContainText(
-      "Shenzhen Tools Co has been paid CN¥50,000.00 through Klasha",
-    );
-  });
-
-  test("pays a supplier in Japan in yen", async ({ page }) => {
-    await page.goto("/app/send");
-    await addRecipient(page, {
-      name: "Yokohama Auto Exports",
-      country: "Japan",
-      account: "1234567",
-      swift: "BOTKJPJT",
-    });
-    await page.getByLabel("Amount the recipient gets").fill("1500000");
-    await page.getByLabel("Pay from").selectOption("KES|bank");
-    await page.getByRole("button", { name: "Compare prices" }).click();
-    await expect(page.getByTestId("route-quote").first()).toContainText("¥1,500,000 arrives");
-  });
-
-  test("falls back to Klasha when Yellow Card, the cheapest for euros, is down", async ({
-    page,
-  }) => {
-    await page.goto("/app/send");
-    await addRecipient(page, {
-      name: "Brussels Flower Auction",
-      country: "Belgium",
-      account: "BE71096123456769",
-      swift: "GEBABEBB",
-      iban: "BE71096123456769",
+      name: "Accra Packaging Ltd",
+      country: "Ghana",
+      currency: "GHS",
+      method: "Mobile money",
+      account: "233244123456",
+      network: "MTN",
     });
     await page.getByLabel("Amount the recipient gets").fill("5000");
     await page.getByLabel("Pay from").selectOption("KES|momo");
     await page.getByRole("button", { name: "Compare prices" }).click();
 
     const quotes = page.getByTestId("route-quote");
-    await expect(quotes.first()).toHaveAttribute("data-provider", "yellowcard");
-    await expect(quotes.nth(1)).toHaveAttribute("data-provider", "klasha");
+    await expect(quotes).toHaveCount(1);
+    await expect(quotes.first()).toHaveAttribute("data-provider", "kotani");
+    await expect(quotes.first()).toContainText("GH₵5,000.00 arrives");
 
-    await page.getByRole("button", { name: /with Yellow Card$/ }).click();
-    await expect(page.getByTestId("fallback-note")).toContainText("Yellow Card was unavailable");
-    await expect(page.getByTestId("routed-payin")).toContainText("Carried by Klasha");
+    await page.getByRole("button", { name: /^Send GH₵5,000\.00 with Kotani Pay$/ }).click();
+    const panel = page.getByTestId("transfer-panel");
+    await expect(panel).toContainText("Waiting for payment");
+    await expect(page.getByTestId("routed-payin")).toContainText("Carried by Kotani Pay");
     await page.getByRole("button", { name: "Simulate my payment (sandbox)" }).click();
-    await expect(page.getByTestId("transfer-panel")).toContainText(
-      "has been paid €5,000.00 through Klasha",
-    );
-    await expect(page.getByTestId("transfer-list")).toContainText("Brussels Flower Auction");
+    await expect(panel).toContainText("Accra Packaging Ltd has been paid GH₵5,000.00");
+    await expect(page.getByTestId("transfer-list")).toContainText("Accra Packaging Ltd");
+  });
+
+  test("a business cannot pick a country no switched-on provider pays", async ({ page }) => {
+    await page.goto("/app/send");
+    await expect(async () => {
+      await page.getByRole("button", { name: "New" }).click();
+      await expect(page.getByTestId("recipient-form")).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 30_000 });
+    const countries = page.getByTestId("recipient-form").getByLabel("Country");
+    // China and Japan are Klasha's, which is switched off.
+    await expect(countries.getByRole("option", { name: "China" })).toHaveCount(0);
+    await expect(countries.getByRole("option", { name: "Japan" })).toHaveCount(0);
+    await expect(countries.getByRole("option", { name: "Ghana" })).toHaveCount(1);
+  });
+
+  test("the switched-off providers stay out of the list", async () => {
+    expect([...ENABLED_PROVIDERS].sort()).toEqual(["kotani", "payaza"]);
   });
 });

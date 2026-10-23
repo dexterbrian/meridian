@@ -167,9 +167,8 @@ export default function SendMoney() {
       <Title>Send money · Meridian</Title>
       <h1 class="font-display text-2xl font-semibold">Send money</h1>
       <p class="mt-1 max-w-2xl text-sm text-muted-foreground">
-        Pay a supplier anywhere we reach: across Africa in local currency, or abroad in EUR, USD,
-        JPY, CNY and more. We ask every provider for a price and use the cheapest. If it is down,
-        the next cheapest takes over.
+        Pay a supplier in any country and currency in the list below. We ask every provider that can
+        carry it for a price and use the cheapest. If it is down, the next cheapest takes over.
       </p>
 
       <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,22rem)]">

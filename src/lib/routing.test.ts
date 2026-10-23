@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  ENABLED_PROVIDERS,
+  PROVIDER_IDS,
   funderOptions,
   payerOptions,
   payerRails,
   payoutDestinations,
   providersFor,
+  type Endpoint,
 } from "./providers";
 import {
   NotRetryable,
@@ -21,9 +24,13 @@ import {
 
 const ids = (m: { provider: string }[]) => m.map((x) => x.provider);
 
+// What a provider is able to do does not change when we switch it off, so these
+// tests ask the whole registry. The switch has its own tests at the end.
+const covering = (from: Endpoint, to: Endpoint) => providersFor(from, to, PROVIDER_IDS);
+
 describe("providersFor: which providers can carry a payment", () => {
   it("Africa to Africa in local currencies: Ghana MoMo cedis to a Kenyan M-Pesa", () => {
-    const m = providersFor(
+    const m = covering(
       { currency: "GHS", rail: "momo", country: "GH" },
       { currency: "KES", rail: "momo", country: "KE" },
     );
@@ -33,7 +40,7 @@ describe("providersFor: which providers can carry a payment", () => {
   });
 
   it("same currency in Kenya: Payaza joins the candidates", () => {
-    const m = providersFor(
+    const m = covering(
       { currency: "KES", rail: "momo", country: "KE" },
       { currency: "KES", rail: "momo", country: "KE" },
     );
@@ -41,7 +48,7 @@ describe("providersFor: which providers can carry a payment", () => {
   });
 
   it("Europe to Africa: a EUR buyer pays by SEPA into a Yellow Card virtual account", () => {
-    const m = providersFor(
+    const m = covering(
       { currency: "EUR", rail: "virtual_account" },
       { currency: "KES", rail: "momo", country: "KE" },
     );
@@ -51,7 +58,7 @@ describe("providersFor: which providers can carry a payment", () => {
   it("Middle East or anywhere to Africa in USD: virtual account or stablecoin", () => {
     expect(
       ids(
-        providersFor(
+        covering(
           { currency: "USD", rail: "virtual_account" },
           { currency: "KES", rail: "bank", country: "KE" },
         ),
@@ -59,7 +66,7 @@ describe("providersFor: which providers can carry a payment", () => {
     ).toEqual(["yellowcard"]);
     expect(
       ids(
-        providersFor(
+        covering(
           { currency: "USD", rail: "stablecoin" },
           { currency: "KES", rail: "momo", country: "KE" },
         ),
@@ -69,24 +76,24 @@ describe("providersFor: which providers can carry a payment", () => {
 
   it("Africa to China and Japan: only Klasha pays CNY and JPY", () => {
     const kes = { currency: "KES", rail: "momo" as const, country: "KE" };
-    expect(ids(providersFor(kes, { currency: "CNY", rail: "bank", country: "CN" }))).toEqual([
+    expect(ids(covering(kes, { currency: "CNY", rail: "bank", country: "CN" }))).toEqual([
       "klasha",
     ]);
-    expect(ids(providersFor(kes, { currency: "CNY", rail: "wallet", country: "CN" }))).toEqual([
+    expect(ids(covering(kes, { currency: "CNY", rail: "wallet", country: "CN" }))).toEqual([
       "klasha",
     ]);
-    expect(ids(providersFor(kes, { currency: "JPY", rail: "bank", country: "JP" }))).toEqual([
+    expect(ids(covering(kes, { currency: "JPY", rail: "bank", country: "JP" }))).toEqual([
       "klasha",
     ]);
   });
 
   it("Africa to Europe and the US: Klasha and Yellow Card compete", () => {
     const kes = { currency: "KES", rail: "momo" as const, country: "KE" };
-    expect(ids(providersFor(kes, { currency: "EUR", rail: "bank", country: "BE" }))).toEqual([
+    expect(ids(covering(kes, { currency: "EUR", rail: "bank", country: "BE" }))).toEqual([
       "yellowcard",
       "klasha",
     ]);
-    expect(ids(providersFor(kes, { currency: "USD", rail: "bank", country: "US" }))).toEqual([
+    expect(ids(covering(kes, { currency: "USD", rail: "bank", country: "US" }))).toEqual([
       "yellowcard",
       "klasha",
     ]);
@@ -96,14 +103,14 @@ describe("providersFor: which providers can carry a payment", () => {
     for (const currency of ["JPY", "CNY"]) {
       for (const rail of ["bank", "card", "virtual_account", "wallet"] as const) {
         expect(
-          providersFor({ currency, rail }, { currency: "KES", rail: "momo", country: "KE" }),
+          covering({ currency, rail }, { currency: "KES", rail: "momo", country: "KE" }),
         ).toEqual([]);
       }
     }
   });
 
   it("marks a route assumed when either leg is undocumented", () => {
-    const m = providersFor(
+    const m = covering(
       { currency: "GHS", rail: "momo", country: "GH" },
       { currency: "KES", rail: "momo", country: "KE" },
     );
@@ -112,10 +119,10 @@ describe("providersFor: which providers can carry a payment", () => {
   });
 
   it("lists the rails a payer can use and every payout destination", () => {
-    expect(payerRails("EUR", undefined, { currency: "KES", rail: "momo", country: "KE" })).toEqual([
-      "virtual_account",
-    ]);
-    const dest = payoutDestinations();
+    expect(
+      payerRails("EUR", undefined, { currency: "KES", rail: "momo", country: "KE" }, PROVIDER_IDS),
+    ).toEqual(["virtual_account"]);
+    const dest = payoutDestinations(PROVIDER_IDS);
     for (const [currency, country] of [
       ["CNY", "CN"],
       ["JPY", "JP"],
@@ -238,7 +245,7 @@ describe("rankQuotes: cheapest first, the rest as fallbacks", () => {
       side: "receive",
     };
     const ranked = rankQuotes(
-      candidates(req).map((c) => estimateQuote(c.provider, req, c.basis)),
+      candidates(req, PROVIDER_IDS).map((c) => estimateQuote(c.provider, req, c.basis)),
       "receive",
     );
     expect(ranked.length).toBeGreaterThanOrEqual(2);
@@ -306,7 +313,7 @@ describe("payerOptions: other ways to pay a business", () => {
   const kes = { currency: "KES", rail: "momo" as const, country: "KE" };
 
   it("offers international bank transfer and USDC first, never the business's own currency", () => {
-    const opts = payerOptions(kes);
+    const opts = payerOptions(kes, PROVIDER_IDS);
     expect(opts.slice(0, 2).map((o) => o.currency)).toEqual(["USD", "USD"]);
     expect(opts.some((o) => o.currency === "EUR" && o.rail === "virtual_account")).toBe(true);
     expect(opts.some((o) => o.currency === "GHS" && o.rail === "momo")).toBe(true);
@@ -314,7 +321,9 @@ describe("payerOptions: other ways to pay a business", () => {
   });
 
   it("has no JPY or CNY option: no provider collects them", () => {
-    expect(payerOptions(kes).some((o) => o.currency === "JPY" || o.currency === "CNY")).toBe(false);
+    expect(
+      payerOptions(kes, PROVIDER_IDS).some((o) => o.currency === "JPY" || o.currency === "CNY"),
+    ).toBe(false);
   });
 });
 
@@ -348,11 +357,55 @@ describe("priceRoute: what the payer is asked for", () => {
 
 describe("funderOptions: how a business pays for a transfer", () => {
   it("a Kenyan business pays from KES mobile money or bank first, then USD/EUR accounts and USDC", () => {
-    const opts = funderOptions("KE");
+    const opts = funderOptions("KE", PROVIDER_IDS);
     expect(opts[0]).toMatchObject({ currency: "KES", country: "KE" });
     expect(opts.some((o) => o.currency === "EUR" && o.rail === "virtual_account")).toBe(true);
     expect(opts.some((o) => o.currency === "USD" && o.rail === "stablecoin")).toBe(true);
     expect(opts.some((o) => o.rail === "card")).toBe(false);
     expect(opts.some((o) => o.currency === "NGN")).toBe(false);
+  });
+});
+
+describe("the switch: only the providers that are on carry money", () => {
+  const kes = { currency: "KES", rail: "momo" as const, country: "KE" };
+
+  it("is Payaza and Kotani today, and nobody else", () => {
+    expect([...ENABLED_PROVIDERS].sort()).toEqual(["kotani", "payaza"]);
+  });
+
+  it("a route a switched-off provider would carry has no candidates", () => {
+    // Yellow Card is the only one that takes euros from abroad, and it is off.
+    expect(providersFor({ currency: "EUR", rail: "virtual_account" }, kes)).toEqual([]);
+    // Klasha is the only one that pays China and Japan, and it is off.
+    expect(providersFor(kes, { currency: "CNY", rail: "bank", country: "CN" })).toEqual([]);
+    expect(providersFor(kes, { currency: "JPY", rail: "bank", country: "JP" })).toEqual([]);
+  });
+
+  it("keeps the routes Kotani can carry on its own", () => {
+    expect(ids(providersFor({ currency: "GHS", rail: "momo", country: "GH" }, kes))).toEqual([
+      "kotani",
+    ]);
+    expect(ids(providersFor({ currency: "USD", rail: "stablecoin" }, kes))).toEqual(["kotani"]);
+  });
+
+  it("never offers a payer a way to pay that nobody switched on can take", () => {
+    for (const o of payerOptions(kes)) {
+      expect(providersFor(o, kes).length).toBeGreaterThan(0);
+    }
+    expect(payerOptions(kes).some((o) => o.currency === "EUR")).toBe(false);
+  });
+
+  it("only offers destinations a switched-on provider pays", () => {
+    const dest = payoutDestinations();
+    expect(dest.some((d) => d.country === "CN" || d.country === "JP")).toBe(false);
+    expect(dest.some((d) => d.currency === "KES" && d.country === "KE")).toBe(true);
+  });
+
+  it("turning a provider back on is one list, with nothing else to change", () => {
+    const withYellowCard = providersFor({ currency: "EUR", rail: "virtual_account" }, kes, [
+      ...ENABLED_PROVIDERS,
+      "yellowcard",
+    ]);
+    expect(ids(withYellowCard)).toEqual(["yellowcard"]);
   });
 });

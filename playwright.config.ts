@@ -28,8 +28,12 @@ export default defineConfig({
     timeout: 120_000,
     env: {
       MERIDIAN_MODE: "sandbox",
-      PARTNER_SIMULATE_FAIL: "yellowcard",
-      // Lets the tests send Minisend webhooks signed like the real ones.
+      // Nothing to fail into: Kotani Pay is the only routed provider switched
+      // on, so no payment has a second provider to fall back to. Set this to the
+      // cheapest provider again once a second one is back on.
+      PARTNER_SIMULATE_FAIL: "",
+      // Lets the tests send Kotani webhooks signed like the real ones.
+      KOTANI_WEBHOOK_SECRET: "e2e-kotani-secret",
       MINISEND_WEBHOOK_SECRET: "e2e-minisend-secret",
       PAYAZA_SIMULATE_PAYOUTS: "true",
       // No emails from test runs.
@@ -40,8 +44,9 @@ export default defineConfig({
       // .env.local leaks in and the prices stop being predictable.
       KOTANI_API_KEY: "",
       KOTANI_PAY_PUBLIC_KEY: "",
+      // KOTANI_WEBHOOK_SECRET is set above to the test one, not cleared: with no
+      // public key the adapter still runs offline, and the tests need to sign.
       KOTANI_PAY_SECRET_KEY: "",
-      KOTANI_WEBHOOK_SECRET: "",
       YELLOWCARD_API_KEY: "",
       YELLOWCARD_SECRET: "",
       KLASHA_USERNAME: "",

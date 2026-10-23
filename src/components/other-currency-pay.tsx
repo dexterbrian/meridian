@@ -95,6 +95,11 @@ export function OtherCurrencyPay(props: {
   }
 
   const top = () => plan()?.quotes[0] ?? null;
+  /** The ways a payer can send dollars right now, named as the list above names them. */
+  const usdWays = () =>
+    (options() ?? [])
+      .filter((o) => o.currency === "USD")
+      .map((o) => RAIL_LABEL[o.rail].toLowerCase());
 
   return (
     <form onSubmit={onSubmit} class="space-y-4" data-testid="other-currency">
@@ -102,7 +107,7 @@ export function OtherCurrencyPay(props: {
         <Globe class="mt-0.5 h-4 w-4 text-primary" />
         <p>
           Pay in your own currency. {props.businessName} still receives exactly {props.amount}. We
-          compare providers and use the cheapest.
+          use the cheapest provider that can carry it.
         </p>
       </div>
       <select
@@ -123,9 +128,13 @@ export function OtherCurrencyPay(props: {
           )}
         </For>
       </select>
+      {/* The ways to pay in dollars depend on which providers are switched on, so
+          the hint names the ones actually in the list above. */}
       <p class="text-xs text-muted-foreground">
-        Paying from Japan or China? No provider collects yen or yuan yet. Pay in USD by
-        international bank transfer, or in USDC.
+        Paying from Japan or China? No provider collects yen or yuan yet.{" "}
+        <Show when={usdWays().length > 0} fallback="Ask the business for another way to pay.">
+          Pay in USD instead: {usdWays().join(", or ")}.
+        </Show>
       </p>
 
       <Show when={quoting()}>

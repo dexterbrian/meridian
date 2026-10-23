@@ -179,9 +179,12 @@ export type RoutePlan = {
   unavailable: { provider: ProviderId; reason: string }[];
 };
 
-/** Candidates for a request: every provider able to carry it end to end. */
-export function candidates(req: RouteRequest) {
-  return providersFor(req.from, req.to);
+/**
+ * Candidates for a request: every switched-on provider able to carry it end to
+ * end. Pass `only` to ask about providers that are switched off.
+ */
+export function candidates(req: RouteRequest, only?: readonly ProviderId[]) {
+  return providersFor(req.from, req.to, only);
 }
 
 export type Attempt = { provider: ProviderId; ok: boolean; error?: string };

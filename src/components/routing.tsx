@@ -46,11 +46,14 @@ export function RouteQuotes(props: { plan: PricedPlan; payerLabel?: string }) {
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div class="flex items-center gap-2">
                   <span class="font-semibold">{q.providerName}</span>
-                  <span
-                    class={`rounded-full px-2 py-0.5 text-xs font-semibold ${i() === 0 ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}
-                  >
-                    {i() === 0 ? "Cheapest" : `Backup ${i()}`}
-                  </span>
+                  {/* Nothing is "cheapest" when it is the only one that can carry the payment. */}
+                  <Show when={props.plan.quotes.length > 1}>
+                    <span
+                      class={`rounded-full px-2 py-0.5 text-xs font-semibold ${i() === 0 ? "bg-primary/15 text-primary" : "bg-secondary text-muted-foreground"}`}
+                    >
+                      {i() === 0 ? "Cheapest" : `Backup ${i()}`}
+                    </span>
+                  </Show>
                   <Show when={q.estimated}>
                     <span
                       class="rounded-full bg-warning/15 px-2 py-0.5 text-xs text-warning"
