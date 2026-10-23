@@ -10,29 +10,43 @@ Meridian asks every provider that can carry a payment for a price, uses the
 cheapest and keeps the rest as backups. This file records what has actually been
 run against each provider, as opposed to built from their documentation.
 
-## Only Kotani Pay is switched on
+## Kotani Pay is the only provider
 
 One list decides which providers may carry money: `ENABLED_PROVIDERS` in
-`src/lib/providers.ts`. Today it holds Payaza, which has always carried
-same-currency payments, and Kotani Pay. Yellow Card, Klasha and Minisend are
-built and unit-tested but switched off until their business checks and sandbox
-keys are done.
+`src/lib/providers.ts`. Today it holds Kotani Pay alone.
 
-Switching one off is not just a routing rule. A payer is never shown a currency
-it would have collected, and a business cannot choose a country it would have
-paid, so nobody is offered a payment we cannot actually carry. With Kotani alone
-that means no euros from Europe, and no payouts to China or Japan.
+**Ordinary money in, ordinary money out.** Meridian never shows a payer or a
+recipient a stablecoin. A provider may settle in stablecoins behind the scenes,
+which is how Kotani works, but nobody is asked to send or receive crypto. No
+provider's onramp or offramp endpoints are used, and that rule holds for the
+providers still to be switched on.
 
-To turn one back on, add its id to that list. Nothing else changes: the adapter,
-the webhook route, the prices and the tests are already there.
+**Two providers were dropped, 23 October 2026.**
+
+- **Minisend.** It is a crypto payment provider: its only product takes USDC and
+  pays out local money. With no crypto in the product there is nothing for it to
+  do. Its code, adapter, webhook route and keys are gone.
+- **Payaza.** It did not meet the requirement, starting with paying out US
+  dollars. It is out of the provider list, out of the router, and no longer
+  offered on the pay page. Its older collection code is still in the tree, but
+  no payment reaches it any more.
+
+**Yellow Card and Klasha are built and switched off**, waiting on their business
+checks and sandbox keys. To turn one back on, add its id to that list. Nothing
+else changes: the adapter, the webhook route, the prices and the tests are
+already there.
+
+Switching a provider off is not just a routing rule. A payer is never shown a
+currency it would have collected, and a business cannot choose a country it
+would have paid, so nobody is offered a payment we cannot actually carry. With
+Kotani alone that means no euros or dollars from abroad, and no payouts to China
+or Japan.
 
 | Provider | Switched on | Keys | Reached live | Prices live | Blocking it |
 |---|---|---|---|---|---|
 | Kotani Pay | yes | sandbox, 11 October 2026 | Yes, until the hold below | No | No exchange rate is set up for any pair |
 | Yellow Card | no | none | — | — | Business checks, then sandbox keys |
 | Klasha | no | none | — | — | Business checks, then sandbox credentials |
-| Minisend | no | none | — | — | Business checks, then a sandbox key |
-| Payaza | yes | live and test | Yes (earlier work) | Same-currency only | Converts nothing, so it only competes on same-currency routes |
 
 ---
 
@@ -49,8 +63,7 @@ cannot price a payment.
 | Ask for a rate, Ghana cedis to Kenyan shillings | Refused: rates not enabled | Reaches the service. Answers "Rate Not Supported" |
 | Take money in by mobile money | Refused: deposit not enabled | Works as far as we can test: it asks for a wallet and a customer |
 | Pay out by mobile money, and by bank | Refused: withdraw not enabled | Same: it asks for the account details |
-| Take the payer's USDC and pay out (offramp) | Refused: not enabled | Still refused |
-| Turn money into USDC (onramp) | Refused: not enabled | Still refused |
+| Their crypto endpoints (onramp, offramp) | Refused: not enabled | Still refused. We don't use them |
 
 Two separate things come back when we ask for a rate. Dollars, euros and naira
 are rejected outright as currencies Kotani does not handle. Every pair of its
@@ -73,12 +86,12 @@ this as a hold rather than a failure, so it is obvious when it is lifted.
 2. Set up exchange rates for the pairs we need, starting with Ghana cedis to
    Kenyan shillings and Kenyan shillings to Ghana cedis. Or tell us which pairs
    the sandbox is meant to price.
-3. Switch on `offramp`, `offramp_mobile_money` and `onramp`. Without offramp a
-   payer abroad cannot pay by USDC, which is the only way Kotani reaches anyone
-   outside its eleven African countries.
-4. Confirm how the sandbox wallet works: paying in and paying out both want a
-   wallet id and a customer key, and tell us whether the account has a wallet in
-   each currency already.
+3. Give us the wallet ids. Taking a payment in and paying one out both name a
+   wallet of ours in that currency, and both also want a saved customer. Tell us
+   whether the account already has a wallet per currency, and confirm the
+   customer endpoint. We set the ids as KOTANI_WALLETS="KES:...,GHS:...".
+4. Nothing else. `onramp`, `offramp` and `offramp_mobile_money` are their crypto
+   endpoints and Meridian does not use them. They can stay off.
 
 ### Three things the live test corrected in our code
 
@@ -110,13 +123,14 @@ South Africa also accept bank and card payments, not only mobile money.
 
 ### What is tested without them
 
-Nine browser tests and 161 unit tests run on every change, with Kotani as the
-only routed provider. They cover a payer abroad paying in USDC and the business
-receiving the exact shillings asked for, a Kenyan business paying a Ghanaian
-supplier in cedis, a signed Kotani webhook settling a payment and a forged one
-being refused, a large first payment to a new supplier being held for review,
-and the switch itself: no euro option for a payer, no China or Japan for a
-business. Prices in those runs are Kotani's published fees, not live quotes.
+Ten browser tests and 160 unit tests run on every change, with Kotani as the
+only provider. They cover a buyer in Ghana paying cedis by mobile money and the
+business receiving the exact shillings asked for, a Kenyan business paying a
+Ghanaian supplier in cedis, a signed Kotani deposit settling a payment and a
+forged one being refused, a large first payment to a new supplier being held for
+review, and the rules themselves: no crypto offered to anyone, no euro option
+for a payer, no China or Japan for a business. Prices in those runs are Kotani's
+published fees, not live quotes.
 
 ---
 
@@ -162,6 +176,12 @@ margin, and that margin is lower than everything else we have.
   payer. Yellow Card has no such restriction documented.
 - **It is African.** Eversend is Ugandan, which sits well with what Meridian is.
 
+### What we would not use
+
+Their stablecoin collection and their stablecoin balance top-up. Meridian takes
+ordinary money in and pays ordinary money out, so if Eversend is added it is for
+its bank and mobile money rails only.
+
 ### Where it does not help
 
 - **No yen and no yuan.** Phillip's Japanese car exporters and McLoud's Chinese
@@ -173,7 +193,7 @@ margin, and that margin is lower than everything else we have.
   can we open a euro IBAN per payment request through the API, at what price,
   and is the business-sender-only rule the same there?**
 - **Money must sit with them.** Payouts come from a balance paid up front, the
-  same operational problem we already have with Klasha and Minisend, until their
+  same operational problem we already have with Klasha, until their
   pay-as-you-go funding ships.
 - **Developer pricing is not published.** Their pages point to sales. **To ask
   them: the collection and payout charges per country for the API product.**

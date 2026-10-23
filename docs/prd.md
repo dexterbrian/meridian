@@ -123,16 +123,25 @@ Hard-coded partner fees (bank 1%, momo 2%, card 2.5%), Meridian 1%, and a 0.35% 
 - **Minisend** turns USDC into KES, NGN, GHS or UGX. Its published fee is about 1%.
 - **Nobody collects yen or yuan.** A buyer in Japan or China pays in USD or USDC.
 
-**Update, 23 October 2026: only Kotani Pay is switched on.** Yellow Card, Klasha and Minisend are built and tested, but their business checks are not done and we have no keys, so they are switched off. A payer is only offered a way to pay that Kotani can take, and a business is only offered a country Kotani pays. Until the others come back:
+**Update, 23 October 2026: Kotani Pay only, and no crypto.** Two rules now shape the provider list.
+
+**One. Ordinary money in, ordinary money out.** A payer always pays in their own currency and a recipient is always paid in theirs. A provider may settle in stablecoins behind the scenes, which is how Kotani works, but Meridian never asks anyone to send or receive crypto and uses no provider's crypto endpoints. This is 5.1's promise, held in the code rather than in copy.
+
+**Two. Only providers that meet the requirement.** Two were dropped:
+
+- **Minisend** is a crypto payment provider. Its only product takes USDC and pays out local money, so with no crypto in the product there is nothing for it to do. Removed.
+- **Payaza** did not meet the requirement, starting with paying out US dollars. Removed as a provider, and no longer offered on the pay page.
+
+**Yellow Card and Klasha are built and switched off** until their business checks and keys are done. So Kotani Pay carries everything today, including a payment in the business's own currency, which Payaza used to take.
 
 | Customer | What works today | What is waiting |
 |---|---|---|
-| Chris (avocados) | A buyer anywhere pays in USDC, Chris gets exact shillings | Euros and dollars by bank transfer need Yellow Card |
-| Ann (flowers) | Buyers in Ghana and Côte d'Ivoire pay in local mobile money | Nigeria needs Yellow Card; Kotani does not do Nigeria |
+| Ann (flowers) | Buyers in Ghana and Côte d'Ivoire pay in local mobile money, Ann gets exact shillings | Nigeria needs Yellow Card; Kotani does not do Nigeria |
+| Chris (avocados) | Nothing yet | Euros and dollars by bank transfer need Yellow Card |
 | McLoud, Phillip | Nothing | China and Japan need Klasha |
-| AfricaHackon | A customer anywhere pays in USDC | Unchanged: no provider lists South Sudan |
+| AfricaHackon | Nothing | No provider lists South Sudan, and USDC is no longer an answer |
 
-The switch is one list in the code (`ENABLED_PROVIDERS` in `src/lib/providers.ts`). Adding an id back turns that provider on everywhere at once.
+The switch is one list in the code (`ENABLED_PROVIDERS` in `src/lib/providers.ts`). Adding an id back turns that provider on everywhere at once: routing, the ways a payer can pay, and the countries a business can send to.
 
 What this means for the customers:
 
