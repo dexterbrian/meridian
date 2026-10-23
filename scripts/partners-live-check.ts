@@ -28,6 +28,7 @@ process.env["MERIDIAN_MODE"] = "sandbox";
 const { ADAPTERS } = await import("../src/server/partners/adapters");
 const { env } = await import("../src/server/env");
 const { planRoute } = await import("../src/server/money/router");
+const { ENABLED_PROVIDERS } = await import("../src/lib/providers");
 import type { ProviderId } from "../src/lib/providers";
 import type { RouteRequest } from "../src/lib/routing";
 
@@ -90,8 +91,21 @@ for (const r of REACH) {
       `FAIL ${r.provider}: key rejected (401). Check the key and that KOTANI_BASE_URL is the environment Kotani gave you.`,
     );
   } else if (!res.ok) {
-    failed++;
-    console.log(`FAIL ${r.provider}: HTTP ${res.status} on ${new URL(url).pathname}`);
+    const body = (await res.json().catch(() => null)) as {
+      code?: string;
+      message?: string;
+      request_id?: string;
+    } | null;
+    // A provider can put a hold on the whole network or device after too many
+    // calls. That is for the provider to lift, not a bug here.
+    if (body?.code === "ACCESS_TEMPORARILY_RESTRICTED") {
+      console.log(
+        `hold ${r.provider}: ${body.message ?? "access temporarily restricted"} Quote request id ${body.request_id ?? "(none given)"}.`,
+      );
+    } else {
+      failed++;
+      console.log(`FAIL ${r.provider}: HTTP ${res.status} on ${new URL(url).pathname}`);
+    }
   } else {
     const body = (await res.json().catch(() => null)) as { data?: unknown[] } | null;
     const n = Array.isArray(body?.data) ? body.data.length : 0;
@@ -100,6 +114,10 @@ for (const r of REACH) {
 }
 
 for (const c of CHECKS) {
+  if (!ENABLED_PROVIDERS.includes(c.provider)) {
+    console.log(`off  ${c.provider}: switched off in ENABLED_PROVIDERS, so nothing routes to it`);
+    continue;
+  }
   const a = ADAPTERS[c.provider];
   if (!a.configured()) {
     console.log(`skip ${c.provider}: no keys in .env.local`);
@@ -116,7 +134,9 @@ for (const c of CHECKS) {
     const message = e instanceof Error ? e.message : String(e);
     // A provider can answer correctly and still refuse: the account may not have
     // the service switched on. That is for the provider to enable, not a bug here.
-    if (/not enabled for this account/i.test(message)) {
+    if (/temporarily restricted/i.test(message)) {
+      console.log(`hold ${c.provider} (${c.why}): ${message}`);
+    } else if (/not enabled for this account|rate not supported/i.test(message)) {
       console.log(`todo ${c.provider} (${c.why}): ${message}`);
     } else {
       failed++;
@@ -126,7 +146,9 @@ for (const c of CHECKS) {
 }
 
 // Klasha quotes need a beneficiary (a recipient), so there is no quote-only check.
-if (ADAPTERS.klasha.configured()) {
+if (!ENABLED_PROVIDERS.includes("klasha")) {
+  console.log("off  klasha: switched off in ENABLED_PROVIDERS, so nothing routes to it");
+} else if (ADAPTERS.klasha.configured()) {
   console.log(
     "klasha: live quote is taken at payout time (needs a beneficiary); run a sandbox transfer to check it",
   );
