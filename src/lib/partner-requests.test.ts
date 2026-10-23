@@ -4,11 +4,10 @@ import {
   klashaBeneficiaryBody,
   klashaQuote,
   kotaniNetwork,
-  kotaniOfframpBody,
+  kotaniCustomerBody,
+  kotaniDepositBody,
   kotaniPayoutBody,
   kotaniQuote,
-  minisendOrderBody,
-  minisendQuote,
   yellowCardHeaders,
   yellowCardPaymentBody,
   yellowCardQuote,
@@ -125,28 +124,6 @@ describe("quote parsers", () => {
     ).toBeNull();
   });
 
-  it("Minisend: USDC in, local currency out, with the quote's expiry", () => {
-    const q = minisendQuote({
-      basis: "documented",
-      reply: {
-        amount_usdc: 10,
-        currency: "KES",
-        rate: 129.45,
-        amount_local: 1294,
-        fee: 13,
-        recipient_amount: 1281,
-        expires_at: "2026-07-05T12:05:00.000Z",
-      },
-    });
-    expect(q).toMatchObject({
-      sendCurrency: "USD",
-      sendAmount: 10,
-      receiveCurrency: "KES",
-      receiveAmount: 1281,
-      expiresAt: "2026-07-05T12:05:00.000Z",
-    });
-  });
-
   it("Klasha: sender pays destination amount at the quoted rate plus both fees", () => {
     const q = klashaQuote({
       from: "NGN",
@@ -180,15 +157,19 @@ describe("payout bodies", () => {
     swiftCode: "ICBKCNBJ",
   };
 
-  it("Kotani: mobile money and bank go to their own endpoints", () => {
-    expect(kotaniPayoutBody(momo, 1000, "MRDK-1", "https://x/cb")).toMatchObject({
-      path: "/withdraw/mobile-money",
-      body: { phoneNumber: "254712345678", network: "MPESA" },
+  it("Kotani: a bank payout carries the account itself, and needs no wallet", () => {
+    const { path, body } = kotaniPayoutBody(
+      { ...momo, rail: "bank", bankCode: "01" },
+      1000,
+      "MRDK-2",
+      "https://x/cb",
+    );
+    expect(path).toBe("/withdraw/v2/bank");
+    expect(body).toMatchObject({
+      currency: "KES",
+      amount: 1000,
+      bankDetails: { accountNumber: "254712345678", bankCode: "01" },
     });
-    expect(
-      kotaniPayoutBody({ ...momo, rail: "bank", bankCode: "01" }, 1000, "MRDK-2", "https://x/cb")
-        .path,
-    ).toBe("/withdraw/v2/bank");
   });
 
   it("Kotani: keeps Vodacom and Vodafone apart", () => {
@@ -199,22 +180,52 @@ describe("payout bodies", () => {
     expect(kotaniNetwork("Wave")).toBe("WAVE");
   });
 
-  it("Kotani: USDC offramp on Base pays M-Pesa directly", () => {
-    expect(
-      kotaniOfframpBody({
-        r: momo,
-        usdc: 1015.18,
-        referenceId: "MRD-ABCDEFGH-1",
-        callbackUrl: "https://x/cb",
-      }),
-    ).toMatchObject({
-      cryptoAmount: 1015.18,
-      currency: "KES",
-      chain: "BASE",
-      token: "USDC",
+  it("Kotani: taking a payment asks the payer's phone, from Meridian's wallet", () => {
+    const { path, body } = kotaniDepositBody({
+      customerKey: "cus_123",
+      amount: 1500,
+      walletId: "wal_kes",
       referenceId: "MRD-ABCDEFGH-1",
-      mobileMoneyReceiver: { phoneNumber: "254712345678", networkProvider: "MPESA" },
+      callbackUrl: "https://x/cb",
     });
+    expect(path).toBe("/deposit/mobile-money");
+    // The names Kotani's own validation asked for: snake_case on a deposit.
+    expect(body).toMatchObject({
+      customer_key: "cus_123",
+      amount: 1500,
+      wallet_id: "wal_kes",
+      reference_id: "MRD-ABCDEFGH-1",
+    });
+  });
+
+  it("Kotani: a mobile money payout names the customer and the wallet", () => {
+    const { path, body } = kotaniPayoutBody(momo, 129000, "MRD-ABCDEFGH-1-P", "https://x/cb", {
+      customerKey: "cus_456",
+      walletId: "wal_kes",
+    });
+    expect(path).toBe("/withdraw/mobile-money");
+    // A withdrawal spells the wallet camelCase. Kotani's naming, not ours.
+    expect(body).toMatchObject({
+      customer_key: "cus_456",
+      amount: 129000,
+      walletId: "wal_kes",
+      referenceId: "MRD-ABCDEFGH-1-P",
+    });
+  });
+
+  it("Kotani: a mobile money payout without a wallet is refused, not sent", () => {
+    expect(() => kotaniPayoutBody(momo, 1, "r", "https://x/cb")).toThrow(/customer and a wallet/);
+  });
+
+  it("Kotani: a customer carries the network name Kotani uses", () => {
+    const { path, body } = kotaniCustomerBody({
+      country: "KE",
+      phoneNumber: "254712345678",
+      network: "M-Pesa",
+      accountName: "Hans Müller",
+    });
+    expect(path).toBe("/customer/mobile-money");
+    expect(body).toMatchObject({ country: "KE", phoneNumber: "254712345678", network: "MPESA" });
   });
 
   it("Yellow Card: destination carries account type, IBAN when given, and business sender", () => {
@@ -239,14 +250,6 @@ describe("payout bodies", () => {
       currency: "CNY",
       swiftCode: "ICBKCNBJ",
       countryCode: "CN",
-    });
-  });
-
-  it("Minisend: mobile money recipient on an offramp order", () => {
-    expect(minisendOrderBody(momo, 50, "0xabc", "MRDM-1")).toMatchObject({
-      amount: 50,
-      currency: "KES",
-      recipient: { method: "MOBILE", phone: "254712345678", mobile_network: "Safaricom" },
     });
   });
 });

@@ -5,9 +5,6 @@
 // How each provider signs, from its docs (checked 4 October 2026):
 //  - Yellow Card: X-YC-Signature = base64 HMAC-SHA256 of the raw body, keyed
 //    with the secret of the API key named in the payload's apiKey field.
-//  - Minisend: X-Minisend-Signature-V2 = "t=<unix seconds>,v1=<hex HMAC-SHA256
-//    of `${t}.${rawBody}`>", 5 minute tolerance; or the older
-//    X-Minisend-Signature = hex HMAC-SHA256 of the raw body.
 //  - Kotani Pay: X-Kotani-Signature = "sha256=" + hex HMAC-SHA256 of
 //    JSON.stringify({ event, data }).
 //  - Klasha: unsigned. Our webhook URL carries a secret token instead, and an
@@ -41,33 +38,6 @@ export async function verifyYellowCardWebhook(
   return timingSafeEqual(b64(await hmacSha256(secret, rawBody)), signature.trim());
 }
 
-/** Minisend signature tolerance, from its docs. */
-export const MINISEND_TOLERANCE_SECONDS = 300;
-
-export async function verifyMinisendWebhook(
-  rawBody: string,
-  headers: { v1: string | null; v2: string | null },
-  secret: string,
-  nowSeconds = Math.floor(Date.now() / 1000),
-): Promise<boolean> {
-  if (!secret) return false;
-  if (headers.v2) {
-    const parts = Object.fromEntries(
-      headers.v2.split(",").map((p) => {
-        const i = p.indexOf("=");
-        return [p.slice(0, i).trim(), p.slice(i + 1).trim()];
-      }),
-    );
-    const t = Number(parts["t"]);
-    const sig = parts["v1"];
-    if (!Number.isFinite(t) || !sig) return false;
-    if (Math.abs(nowSeconds - t) > MINISEND_TOLERANCE_SECONDS) return false;
-    return timingSafeEqual(hex(await hmacSha256(secret, `${t}.${rawBody}`)), sig);
-  }
-  if (headers.v1) return timingSafeEqual(hex(await hmacSha256(secret, rawBody)), headers.v1.trim());
-  return false;
-}
-
 export async function verifyKotaniWebhook(
   body: { event?: unknown; data?: unknown },
   signature: string | null,
@@ -90,9 +60,9 @@ export type RoutedEvent = {
   partnerRef: string | null;
   /**
    * payin: the payer's money reached the provider. payout: the recipient was
-   * paid. both: the provider takes the money and pays out in one order (Minisend).
+   * paid.
    */
-  stage: "payin" | "payout" | "both";
+  stage: "payin" | "payout";
   outcome: "success" | "failed" | "pending";
   /** Unique per event, so a repeat delivery changes nothing. */
   key: string;
@@ -131,39 +101,14 @@ export function parseYellowCardWebhook(body: unknown): RoutedEvent | null {
   };
 }
 
-export function parseMinisendWebhook(body: unknown): RoutedEvent | null {
-  const b = (body ?? {}) as Record<string, unknown>;
-  const event = str(b["event"]);
-  if (!event?.startsWith("offramp.")) return null;
-  const orderId = str(b["order_id"]);
-  return {
-    provider: "minisend",
-    reference: str(b["external_reference"]),
-    partnerRef: orderId,
-    stage: "both",
-    outcome: outcomeOf(event.slice("offramp.".length)),
-    key: `minisend:${orderId}:${event}`,
-    reason:
-      event === "offramp.expired"
-        ? "No USDC arrived before the order expired."
-        : str(b["failure_reason"]),
-  };
-}
-
 export function parseKotaniWebhook(body: unknown): RoutedEvent | null {
   const b = (body ?? {}) as Record<string, unknown>;
   const event = str(b["event"]);
   const d = (b["data"] ?? {}) as Record<string, unknown>;
   if (!event) return null;
   // Deposit payloads are snake_case and withdrawal payloads camelCase (Kotani docs).
-  // An offramp takes the payer's USDC and pays the recipient in one order.
-  const stage = event.includes("offramp")
-    ? "both"
-    : event.includes("deposit")
-      ? "payin"
-      : event.includes("withdraw")
-        ? "payout"
-        : null;
+  // Money in is a deposit; money out is a withdrawal.
+  const stage = event.includes("deposit") ? "payin" : event.includes("withdraw") ? "payout" : null;
   if (!stage) return null;
   const status = str(d["status"]);
   const reference = str(d["reference_id"]) ?? str(d["referenceId"]) ?? str(d["reference"]);

@@ -140,21 +140,19 @@ function Row(props: { label: string; value: string; copyable?: boolean; mono?: b
   );
 }
 
-/** What to send, where: a bank account abroad, a USDC address, or a wallet prompt. */
-export function RoutedPayinBox(props: { payin: PayinInstructions; providerName: string | null }) {
+/** What to send, where: a bank account abroad, or a prompt on the payer's phone. */
+export function RoutedPayinBox(props: {
+  payin: PayinInstructions;
+  providerName: string | null;
+  reference: string;
+}) {
   const total = () =>
     formatMoney(props.payin.amount, "currency" in props.payin ? props.payin.currency : "USD");
   return (
     <div class="overflow-hidden rounded-xl border border-border" data-testid="routed-payin">
       <div class="bg-primary/10 p-4 text-center">
         <p class="text-xs text-muted-foreground">Send exactly</p>
-        <p class="mt-1 font-display text-xl font-semibold">
-          <Switch fallback={total()}>
-            <Match when={props.payin.kind === "stablecoin"}>
-              {props.payin.amount.toFixed(2)} USDC
-            </Match>
-          </Switch>
-        </p>
+        <p class="mt-1 font-display text-xl font-semibold">{total()}</p>
         <Show when={props.providerName}>
           <p class="mt-1 text-xs text-muted-foreground">Carried by {props.providerName}</p>
         </Show>
@@ -175,19 +173,15 @@ export function RoutedPayinBox(props: { payin: PayinInstructions; providerName: 
               </>
             )}
           </Match>
-          <Match when={props.payin.kind === "stablecoin" && props.payin}>
+          <Match when={props.payin.kind === "momo_prompt" && props.payin}>
             {(p) => (
               <>
-                <Row label="Token" value={`${p().token} on ${p().network}`} />
-                <Row label="Address" value={p().address} copyable mono />
-                <Show when={p().expiresAt}>
-                  <Row label="Send before" value={new Date(p().expiresAt!).toLocaleTimeString()} />
-                </Show>
+                <p class="py-2 text-sm">
+                  Approve the prompt on your phone to pay{p().phone ? ` (${p().phone})` : ""}.
+                </p>
+                <Row label="Reference" value={props.reference} copyable mono />
               </>
             )}
-          </Match>
-          <Match when={props.payin.kind === "momo_prompt" && props.payin}>
-            <p class="py-2 text-sm">Approve the prompt on your phone to pay.</p>
           </Match>
         </Switch>
         <Show when={props.payin.simulated}>

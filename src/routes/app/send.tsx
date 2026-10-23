@@ -321,7 +321,11 @@ function TransferPanel(props: {
       </div>
       <FallbackNote attempts={t().attempts} />
       <Show when={t().status === "awaiting_payin" && t().payin}>
-        <RoutedPayinBox payin={t().payin as PayinInstructions} providerName={t().providerName} />
+        <RoutedPayinBox
+          payin={t().payin as PayinInstructions}
+          providerName={t().providerName}
+          reference={t().reference}
+        />
         <Show when={t().sandbox}>
           <button
             type="button"

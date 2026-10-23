@@ -23,30 +23,31 @@ function signed(body: { event: string; data: Record<string, unknown> }, secret =
   };
 }
 
-async function clickUntil(page: Page, button: string, visible: string) {
+/**
+ * Picks how to pay and waits for a price. The select is retried because the
+ * first load of a dev server can render before it is hydrated, and an unhydrated
+ * select takes the choice without asking for a quote.
+ */
+async function payWith(page: Page, label: string) {
+  await expect(page.getByLabel("Currency and way to pay")).toBeVisible({ timeout: 30_000 });
   await expect(async () => {
-    await page.getByRole("button", { name: button }).click();
-    await expect(page.getByText(visible)).toBeVisible({ timeout: 1000 });
+    await page.getByLabel("Currency and way to pay").selectOption({ label });
+    await expect(page.getByTestId("route-quote").first()).toBeVisible({ timeout: 2000 });
   }).toPass({ timeout: 30_000 });
 }
 
 test.describe("provider webhooks", () => {
-  test("a signed Kotani webhook settles a USDC payment; a forged one is refused", async ({
-    page,
-  }) => {
+  test("a signed Kotani deposit settles the payment; a forged one is refused", async ({ page }) => {
     await page.goto(`/pay/${data().requests[2]}`);
-    await clickUntil(
-      page,
-      "Paying from abroad or in another currency?",
-      "No provider collects yen or yuan yet",
-    );
-    await page.getByLabel("Currency and way to pay").selectOption({ label: "USD · USDC / USDT" });
+    await payWith(page, "GHS · Mobile money (Ghana)");
     await expect(page.getByTestId("route-quote").first()).toHaveAttribute(
       "data-provider",
       "kotani",
     );
-    await page.getByLabel("Your name").fill("Aiko Tanaka");
-    await page.getByLabel("Email").fill("aiko@example.test");
+    await page.getByLabel("Your name").fill("Abena Osei");
+    await page.getByLabel("Email").fill("abena@example.test");
+    await page.getByLabel("Your country").selectOption("GH");
+    await page.getByLabel("Phone").fill("233244777666");
     await page.getByRole("button", { name: /with Kotani Pay$/ }).click();
     await expect(page.getByTestId("routed-payin")).toContainText("Carried by Kotani Pay");
 
@@ -57,12 +58,13 @@ test.describe("provider webhooks", () => {
       .first()
       .textContent())!.trim();
 
-    // An offramp takes the payer's USDC and pays the recipient in one order.
+    // The payer's money reaching Kotani is a deposit. Kotani then pays the
+    // business out, which in a test run with no keys is simulated.
     const body = {
-      event: "offramp.completed",
+      event: "transaction.deposit.status.updated",
       data: {
         reference_id: reference,
-        status: "completed",
+        status: "SUCCESSFUL",
         id: `kot-${Date.now()}`,
       },
     };

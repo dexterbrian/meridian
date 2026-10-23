@@ -176,6 +176,7 @@ export function OtherCurrencyPay(props: {
               aria-label="Phone"
               class={INPUT_CLASS}
               placeholder="Mobile money number"
+              required
             />
           </Show>
         </div>

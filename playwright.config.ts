@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-// Browser tests against a dev server on its own port, in sandbox mode, with
-// Yellow Card set to fail so the fallback to the next cheapest provider shows.
+// Browser tests against a dev server on its own port, in sandbox mode, with no
+// provider keys, so prices are published fees and execution is simulated.
 // Needs the local Supabase stack running (npx supabase start).
 //   npm run test:e2e
 
@@ -34,8 +34,6 @@ export default defineConfig({
       PARTNER_SIMULATE_FAIL: "",
       // Lets the tests send Kotani webhooks signed like the real ones.
       KOTANI_WEBHOOK_SECRET: "e2e-kotani-secret",
-      MINISEND_WEBHOOK_SECRET: "e2e-minisend-secret",
-      PAYAZA_SIMULATE_PAYOUTS: "true",
       // No emails from test runs.
       RESEND_API_KEY: "",
       // No provider keys: every routed provider gives estimates and simulated
@@ -53,7 +51,6 @@ export default defineConfig({
       KLASHA_PASSWORD: "",
       KLASHA_PUBLIC_KEY: "",
       KLASHA_ENCRYPTION_KEY: "",
-      MINISEND_API_KEY: "",
     },
   },
 });

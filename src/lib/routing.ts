@@ -69,9 +69,6 @@ export type RouteQuote = {
  *    an assumed 1% channel fee.
  *  - Klasha Wire: example NGN to USD 1,000 has source fees of 27.5 USD (2.75%)
  *    and destination fees of 27.5 USD; spread assumed 1%.
- *  - Minisend: offramp example fee 13 on 1,294 KES (about 1%), spread assumed
- *    0.5%; a non-stablecoin payer adds an onramp leg at the same cost.
- *  - Payaza: its per-method schedule (fees.ts); no conversion.
  */
 export type Estimate = { feePct: number; fixedUsd: number; spreadPct: number };
 
@@ -79,24 +76,12 @@ export function estimateFor(p: ProviderId, from: Endpoint, to: Endpoint): Estima
   const fx = from.currency !== to.currency;
   const usdSide = from.currency === "USD" || to.currency === "USD";
   switch (p) {
-    case "payaza":
-      return {
-        feePct: from.rail === "card" ? 0.025 : from.rail === "momo" ? 0.02 : 0.01,
-        fixedUsd: 0,
-        spreadPct: 0,
-      };
     case "kotani":
       return { feePct: 0.05, fixedUsd: 0, spreadPct: fx ? 0.01 : 0 };
     case "yellowcard":
       return { feePct: 0.01, fixedUsd: 0, spreadPct: !fx ? 0 : usdSide ? 0.0087 : 0.0174 };
     case "klasha":
       return { feePct: 0.0275, fixedUsd: 27.5, spreadPct: fx ? 0.01 : 0 };
-    case "minisend":
-      return {
-        feePct: from.rail === "stablecoin" ? 0.01 : 0.02,
-        fixedUsd: 0,
-        spreadPct: fx ? 0.005 : 0,
-      };
   }
 }
 
@@ -223,9 +208,8 @@ export async function executeWithFallback<T>(
  * What the payer is asked for on a routed payment. The provider's quote already
  * covers its fees and spread; Meridian adds its flat 1% of that on top (PRD 5.3).
  * `amount` is the recipient's amount valued in the payer's currency at the
- * mid-market reference, so amount + providerFee + meridianFee = total, the same
- * rule as a Payaza collection. Whole-unit currencies (KES, UGX, JPY ...) round
- * the total up to a whole unit.
+ * mid-market reference, so amount + providerFee + meridianFee = total.
+ * Whole-unit currencies (KES, UGX, JPY ...) round the total up to a whole unit.
  */
 export function priceRoute(q: RouteQuote, wholeUnits: boolean) {
   const meridianFee = round2(q.sendAmount * MERIDIAN_FEE);

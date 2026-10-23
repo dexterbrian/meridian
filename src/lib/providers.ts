@@ -11,9 +11,9 @@
 // "assumed" means the docs imply it but list no exact country or channel table,
 // so it needs confirming with the provider (their coverage endpoints return the
 // live list: Kotani GET /country, Yellow Card GET /channels, Klasha currency
-// coverage, Minisend supported currencies).
+// coverage).
 
-export type ProviderId = "payaza" | "kotani" | "yellowcard" | "klasha" | "minisend";
+export type ProviderId = "kotani" | "yellowcard" | "klasha";
 
 /**
  * How money moves on one side of a payment.
@@ -21,17 +21,20 @@ export type ProviderId = "payaza" | "kotani" | "yellowcard" | "klasha" | "minise
  *  - bank: local bank account or bank transfer
  *  - card: Visa / Mastercard
  *  - virtual_account: a USD/EUR/GBP account the payer pays into by ACH, wire, SWIFT, SEPA or Faster Payments
- *  - stablecoin: USDC / USDT sent on-chain; priced in USD
  *  - wallet: Chinese wallets (Alipay, WeChat Pay, UnionPay)
+ *
+ * There is no stablecoin rail. A provider may settle in stablecoins behind the
+ * scenes, as Kotani does, but a payer always pays in ordinary money and a
+ * recipient is always paid in ordinary money.
  */
-export type Rail = "momo" | "bank" | "card" | "virtual_account" | "stablecoin" | "wallet";
+export type Rail = "momo" | "bank" | "card" | "virtual_account" | "wallet";
 
 export type Basis = "documented" | "assumed";
 
 export type Coverage = {
-  /** ISO 4217. Stablecoins are priced as USD with rail "stablecoin". */
+  /** ISO 4217. */
   currency: string;
-  /** ISO-2 countries. Empty = any country (cards, stablecoins, virtual accounts). */
+  /** ISO-2 countries. Empty = any country (cards, virtual accounts). */
   countries: string[];
   rails: Rail[];
   basis: Basis;
@@ -65,26 +68,6 @@ const EUR_SEPA = ["AT", "BE", "DE", "ES", "FR", "IE", "IT", "NL", "PT"];
 // prettier-ignore
 export const PROVIDERS: ProviderProfile[] = [
   {
-    id: "payaza",
-    name: "Payaza",
-    // Payaza confirmed on 29 Sep 2026: no conversion for payouts, transfers or split settlement.
-    converts: false,
-    docs: "https://docs.payaza.africa/",
-    collect: [
-      cov("KES", ["KE"], ["momo"]), cov("UGX", ["UG"], ["momo"]), cov("TZS", ["TZ"], ["momo"]),
-      cov("GHS", ["GH"], ["momo"]), cov("XAF", ["CM"], ["momo"]), cov("XOF", ["CI", "BJ"], ["momo"]),
-      cov("SLE", ["SL"], ["momo"]), cov("LRD", ["LR"], ["momo"]), cov("ZMW", ["ZM"], ["momo"]),
-      cov("CDF", ["CD"], ["momo"]), cov("ZAR", ["ZA"], ["bank"]), cov("NGN", ["NG"], ["bank", "card"]),
-      cov("USD", any, ["card"]),
-    ],
-    payout: [
-      cov("KES", ["KE"], ["momo", "bank"]), cov("UGX", ["UG"], ["momo"]), cov("TZS", ["TZ"], ["momo", "bank"]),
-      cov("NGN", ["NG"], ["bank"]), cov("GHS", ["GH"], ["momo", "bank"]), cov("ZAR", ["ZA"], ["bank"]),
-      cov("XAF", ["CM"], ["momo"]), cov("LRD", ["LR"], ["momo"]), cov("ZMW", ["ZM"], ["momo"]),
-      cov("CDF", ["CD"], ["momo"]),
-    ],
-  },
-  {
     id: "kotani",
     name: "Kotani Pay",
     // POST /rate/fiat quotes fiat-to-fiat with a fee on each leg; offramp turns USDC/USDT into fiat.
@@ -102,8 +85,6 @@ export const PROVIDERS: ProviderProfile[] = [
       cov("XOF", ["CI", "SN"], ["momo"]), cov("XAF", ["CM"], ["momo"]),
       cov("CDF", ["CD"], ["momo"]), cov("SLE", ["SL"], ["momo"]),
       cov("ZAR", ["ZA"], ["momo", "bank", "card"]),
-      // On-chain deposit / offramp: a payer anywhere sends USDC or USDT.
-      cov("USD", any, ["stablecoin"]),
     ],
     payout: [
       cov("KES", ["KE"], ["momo", "bank"]), cov("GHS", ["GH"], ["momo"]),
@@ -169,22 +150,6 @@ export const PROVIDERS: ProviderProfile[] = [
       cov("ZMW", ["ZM"], ["bank"]), cov("ETB", ["ET"], ["bank"]),
     ],
   },
-  {
-    id: "minisend",
-    name: "Minisend",
-    // USDC in the middle: onramp (local fiat to USDC) then offramp (USDC to local fiat).
-    converts: true,
-    docs: "https://docs.minisend.xyz/introduction",
-    collect: [
-      cov("KES", ["KE"], ["momo", "bank"], "assumed"), cov("NGN", ["NG"], ["bank"], "assumed"),
-      cov("GHS", ["GH"], ["momo", "bank"], "assumed"), cov("UGX", ["UG"], ["momo"], "assumed"),
-      cov("USD", any, ["stablecoin"]),
-    ],
-    payout: [
-      cov("KES", ["KE"], ["momo", "bank"]), cov("NGN", ["NG"], ["bank"]),
-      cov("GHS", ["GH"], ["momo", "bank"]), cov("UGX", ["UG"], ["momo"]),
-    ],
-  },
 ];
 
 export const PROVIDER_IDS = PROVIDERS.map((p) => p.id);
@@ -198,12 +163,11 @@ export const PROVIDER_IDS = PROVIDERS.map((p) => p.id);
  * Routing, the ways a payer can pay, and the destinations a business can send to
  * all read this list, so this one line is the whole switch.
  *
- * On now: Payaza, which carries same-currency payments and always has, and
- * Kotani Pay. Yellow Card, Klasha and Minisend are built, unit-tested and ready;
- * they are off until their business checks and sandbox keys are done. To turn
- * one back on, add its id here. Nothing else changes.
+ * On now: Kotani Pay, and nothing else. Yellow Card and Klasha are built,
+ * unit-tested and ready; they are off until their business checks and sandbox
+ * keys are done. To turn one back on, add its id here. Nothing else changes.
  */
-export const ENABLED_PROVIDERS: readonly ProviderId[] = ["payaza", "kotani"];
+export const ENABLED_PROVIDERS: readonly ProviderId[] = ["kotani"];
 
 /** The switched-on providers, or an explicit set (coverage tests and docs pass the full registry). */
 function switchedOn(only: readonly ProviderId[]): ProviderProfile[] {
@@ -267,7 +231,7 @@ export function payerRails(
   only: readonly ProviderId[] = ENABLED_PROVIDERS,
 ): Rail[] {
   const rails = new Set<Rail>();
-  for (const r of ["momo", "bank", "card", "virtual_account", "stablecoin", "wallet"] as Rail[]) {
+  for (const r of ["momo", "bank", "card", "virtual_account", "wallet"] as Rail[]) {
     if (providersFor({ currency, rail: r, country }, to, only).length > 0) rails.add(r);
   }
   return [...rails];
@@ -301,7 +265,6 @@ export const RAIL_LABEL: Record<Rail, string> = {
   bank: "Bank account",
   card: "Card",
   virtual_account: "International bank transfer",
-  stablecoin: "USDC / USDT",
   wallet: "Alipay / WeChat Pay",
 };
 
@@ -310,10 +273,9 @@ export type PayerOption = { currency: string; rail: Rail; country?: string };
 const FIRST = ["USD", "EUR", "GBP"];
 
 /**
- * Other ways to pay a business whose money lands on `to`: every currency and rail
- * some provider can collect and deliver from. The business's own currency is
- * left out; the pay page offers it through Payaza already. International options
- * (USD, EUR, GBP) come first.
+ * How a payer can pay a business whose money lands on `to`: every currency and
+ * rail a switched-on provider can collect and deliver from, the business's own
+ * currency included. International options (USD, EUR, GBP) come first.
  */
 export function payerOptions(
   to: Endpoint,
@@ -322,7 +284,6 @@ export function payerOptions(
   const seen = new Map<string, PayerOption>();
   for (const p of switchedOn(only)) {
     for (const c of p.collect) {
-      if (c.currency === to.currency) continue;
       for (const rail of c.rails) {
         const option: PayerOption = { currency: c.currency, rail, country: c.countries[0] };
         const key = `${c.currency}|${rail}`;
@@ -351,7 +312,6 @@ export function funderOptions(
 ): PayerOption[] {
   const seen = new Map<string, PayerOption>();
   for (const p of switchedOn(only)) {
-    if (p.id === "payaza") continue; // Payaza doesn't convert, so it can't fund a routed transfer.
     for (const c of p.collect) {
       if (c.countries.length > 0 && !c.countries.includes(country)) continue;
       for (const rail of c.rails) {

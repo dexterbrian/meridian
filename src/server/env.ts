@@ -88,6 +88,20 @@ export const env = {
         }
       : null;
   },
+  /**
+   * Kotani holds Meridian's money in a wallet per currency, and both taking a
+   * payment in and paying one out name that wallet. Set as
+   * KOTANI_WALLETS="KES:abc123,GHS:def456"; a currency with no wallet cannot be
+   * carried by Kotani at all, and the payer is told so.
+   */
+  kotaniWallet(currency: string): string | null {
+    const raw = read("KOTANI_WALLETS") ?? "";
+    for (const part of raw.split(",")) {
+      const [code, id] = part.split(":");
+      if (code?.trim().toUpperCase() === currency.toUpperCase() && id?.trim()) return id.trim();
+    }
+    return read(`KOTANI_WALLET_${currency.toUpperCase()}`) ?? null;
+  },
   get yellowcard() {
     const apiKey = read("YELLOWCARD_API_KEY");
     const secret = read("YELLOWCARD_SECRET");
@@ -121,20 +135,6 @@ export const env = {
         }
       : null;
   },
-  get minisend() {
-    const apiKey = read("MINISEND_API_KEY");
-    return apiKey
-      ? {
-          apiKey,
-          baseUrl: (read("MINISEND_BASE_URL") ?? "https://merchant.minisend.xyz").replace(
-            /\/+$/,
-            "",
-          ),
-          /** EVM address Meridian controls, for refunds of stray USDC. Required by offramp orders. */
-          refundAddress: read("MINISEND_REFUND_ADDRESS") ?? "",
-        }
-      : null;
-  },
   // Webhook secrets, separate from the API keys: a webhook can arrive (and must
   // be checked) whatever else is configured. Yellow Card signs with the API
   // key's own secret, so it has none of its own.
@@ -142,9 +142,6 @@ export const env = {
     // The key pair's secret is what signs Kotani's webhooks, unless the
     // dashboard issued a separate webhook secret.
     return read("KOTANI_WEBHOOK_SECRET") ?? read("KOTANI_PAY_SECRET_KEY");
-  },
-  get minisendWebhookSecret() {
-    return read("MINISEND_WEBHOOK_SECRET");
   },
   /** Klasha doesn't sign webhooks, so the URL we give it carries this token. */
   get klashaWebhookToken() {

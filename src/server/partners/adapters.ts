@@ -2,17 +2,15 @@ import "server-only";
 import {
   klashaBeneficiaryBody,
   klashaQuote,
-  kotaniOfframpBody,
+  kotaniCustomerBody,
+  kotaniDepositBody,
   kotaniPayoutBody,
   kotaniQuote,
-  minisendOrderBody,
-  minisendQuote,
   yellowCardHeaders,
   yellowCardPaymentBody,
   yellowCardQuote,
   type KlashaWireQuote,
   type KotaniFiatRate,
-  type MinisendOfframpQuote,
   type Recipient,
   type YellowCardRate,
 } from "~/lib/partner-requests";
@@ -42,15 +40,6 @@ export type PayinInstructions =
       reference: string;
       simulated: boolean;
     }
-  | {
-      kind: "stablecoin";
-      token: "USDC" | "USDT";
-      network: string;
-      address: string;
-      amount: number;
-      expiresAt: string | null;
-      simulated: boolean;
-    }
   | { kind: "momo_prompt"; currency: string; amount: number; phone: string; simulated: boolean };
 
 export type PayoutResult = { partnerRef: string; simulated: boolean };
@@ -72,6 +61,8 @@ export interface Adapter {
     reference: string;
     payoutTo: Recipient;
     transactionId?: string;
+    /** Who is paying. A mobile money prompt needs their number. */
+    payer?: { name: string; phone: string | null; country: string | null; network?: string | null };
   }): Promise<PayinInstructions>;
 }
 
@@ -117,17 +108,6 @@ export function simulatedPayin(
   rail: string,
   reference: string,
 ): PayinInstructions {
-  if (rail === "stablecoin") {
-    return {
-      kind: "stablecoin",
-      token: "USDC",
-      network: "Base",
-      address: "0x000000000000000000000000000000005a4d0b0x".slice(0, 42),
-      amount: quote.sendAmount,
-      expiresAt: new Date(Date.now() + 30 * 60_000).toISOString(),
-      simulated: true,
-    };
-  }
   if (rail === "momo") {
     return {
       kind: "momo_prompt",
@@ -157,6 +137,39 @@ export function simulatedPayin(
 }
 
 /* -------------------------------- Kotani Pay ------------------------------ */
+
+/**
+ * Kotani's mobile money works through a saved customer and Meridian's own wallet
+ * in that currency. This makes the customer and returns its key.
+ */
+async function kotaniCustomer(
+  base: string,
+  apiKey: string,
+  who: { country: string; phoneNumber: string; network?: string | null; accountName: string },
+  transactionId?: string,
+): Promise<string> {
+  const { path, body } = kotaniCustomerBody({
+    country: who.country,
+    phoneNumber: who.phoneNumber,
+    network: who.network ?? undefined,
+    accountName: who.accountName,
+  });
+  const r = await partnerFetch<{
+    data?: { customerKey?: string; customer_key?: string };
+    message?: string;
+  }>({
+    partner: "kotani",
+    method: "POST",
+    url: `${base}${path}`,
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: JSON.stringify(body),
+    transactionId,
+  });
+  const key = r.data?.data?.customerKey ?? r.data?.data?.customer_key;
+  if (!r.ok || !key)
+    throw new Error(`Kotani could not save the customer: ${r.data?.message ?? `HTTP ${r.status}`}`);
+  return key;
+}
 
 const kotani: Adapter = {
   id: "kotani",
@@ -196,11 +209,34 @@ const kotani: Adapter = {
   async payout({ quote, recipient, reference, transactionId }) {
     const k = env.kotani;
     if (!k) return offline("kotani").payout({ reference });
+    let momo: { customerKey: string; walletId: string } | undefined;
+    if (recipient.rail === "momo") {
+      const walletId = env.kotaniWallet(recipient.currency);
+      if (!walletId)
+        throw new Error(
+          `Kotani has no wallet set for ${recipient.currency} (KOTANI_WALLETS), so it cannot pay out.`,
+        );
+      momo = {
+        walletId,
+        customerKey: await kotaniCustomer(
+          k.baseUrl,
+          k.apiKey,
+          {
+            country: recipient.country,
+            phoneNumber: recipient.accountNumber,
+            network: recipient.network,
+            accountName: recipient.name,
+          },
+          transactionId,
+        ),
+      };
+    }
     const { path, body } = kotaniPayoutBody(
       recipient,
       quote.receiveAmount,
       reference,
       `${env.appUrl}/api/webhooks/kotani`,
+      momo,
     );
     const r = await partnerFetch<{ success?: boolean; message?: string }>({
       partner: "kotani",
@@ -217,39 +253,53 @@ const kotani: Adapter = {
   async collect(input) {
     const k = env.kotani;
     if (!k) return offline("kotani").collect(input);
-    if (input.rail !== "stablecoin")
-      throw new Error("Kotani collection from a payer here is by USDC only.");
-    // Offramp: the payer's USDC goes to Kotani's escrow and Kotani pays the recipient.
-    const r = await partnerFetch<{
-      data?: { escrowAddress?: string; cryptoAmount?: number; referenceId?: string };
-      message?: string;
-    }>({
+    if (input.rail !== "momo")
+      throw new Error(
+        "Kotani takes a payer's money by mobile money. Its bank and card collection needs a hosted page we have not built.",
+      );
+    const phone = input.payer?.phone;
+    if (!phone) throw new Error("A mobile money payment needs the payer's phone number.");
+    const walletId = env.kotaniWallet(input.quote.sendCurrency);
+    if (!walletId)
+      throw new Error(
+        `Kotani has no wallet set for ${input.quote.sendCurrency} (KOTANI_WALLETS), so it cannot take this payment.`,
+      );
+    const customerKey = await kotaniCustomer(
+      k.baseUrl,
+      k.apiKey,
+      {
+        country: input.payer?.country ?? "",
+        phoneNumber: phone,
+        network: input.payer?.network,
+        accountName: input.payer?.name ?? "Payer",
+      },
+      input.transactionId,
+    );
+    const { path, body } = kotaniDepositBody({
+      customerKey,
+      amount: input.quote.sendAmount,
+      walletId,
+      referenceId: input.reference,
+      callbackUrl: `${env.appUrl}/api/webhooks/kotani`,
+    });
+    const r = await partnerFetch<{ data?: unknown; success?: boolean; message?: string }>({
       partner: "kotani",
       method: "POST",
-      url: `${k.baseUrl}/offramp`,
+      url: `${k.baseUrl}${path}`,
       headers: { Authorization: `Bearer ${k.apiKey}` },
-      body: JSON.stringify(
-        kotaniOfframpBody({
-          r: input.payoutTo,
-          usdc: input.quote.sendAmount,
-          referenceId: input.reference,
-          callbackUrl: `${env.appUrl}/api/webhooks/kotani`,
-        }),
-      ),
+      body: JSON.stringify(body),
       transactionId: input.transactionId,
     });
-    const d = r.data?.data;
-    if (!r.ok || !d?.escrowAddress)
+    if (!r.ok || r.data?.success === false)
       throw new Error(
-        `Kotani did not return a deposit address: ${r.data?.message ?? `HTTP ${r.status}`}`,
+        `Kotani could not ask for the payment: ${r.data?.message ?? `HTTP ${r.status}`}`,
       );
+    // Kotani prompts the phone; the payer approves there and its webhook follows.
     return {
-      kind: "stablecoin",
-      token: "USDC",
-      network: "Base",
-      address: d.escrowAddress,
-      amount: d.cryptoAmount ?? input.quote.sendAmount,
-      expiresAt: null,
+      kind: "momo_prompt",
+      currency: input.quote.sendCurrency,
+      amount: input.quote.sendAmount,
+      phone,
       simulated: false,
     };
   },
@@ -552,114 +602,8 @@ const klasha: Adapter = {
   },
 };
 
-/* --------------------------------- Minisend ------------------------------- */
-
-const minisend: Adapter = {
-  id: "minisend",
-  configured: () => env.minisend !== null,
-  async quote(req, basis) {
-    const m = env.minisend;
-    // Live quotes only for USDC in (offramp); a local-currency payer adds an onramp
-    // leg whose quote fields we haven't confirmed, so that route stays an estimate.
-    if (!m || req.from.rail !== "stablecoin") return offline("minisend").quote(req, basis);
-    const call = async (usdc: number) => {
-      const r = await partnerFetch<MinisendOfframpQuote>({
-        partner: "minisend",
-        method: "POST",
-        url: `${m.baseUrl}/api/offramp/quote`,
-        headers: { Authorization: `Bearer ${m.apiKey}` },
-        body: JSON.stringify({ amount: usdc, currency: req.to.currency }),
-      });
-      return r.data?.recipient_amount !== undefined
-        ? minisendQuote({ reply: r.data, basis })
-        : null;
-    };
-    if (req.side === "send") return call(req.amount);
-    const probe = await call(Math.max(1, req.amount / 130));
-    if (!probe || probe.receiveAmount <= 0) return null;
-    return call(Math.ceil(((req.amount * probe.sendAmount) / probe.receiveAmount) * 100) / 100);
-  },
-  async payout({ quote, recipient, reference, transactionId }) {
-    const m = env.minisend;
-    if (!m) return offline("minisend").payout({ reference });
-    // Paying out from Meridian's USDC: create an order and fund it from treasury.
-    // Funding the deposit is an operational step (PRD 5.6), so the order is left
-    // for treasury and reported as pending.
-    const r = await partnerFetch<{ order_id?: string }>({
-      partner: "minisend",
-      method: "POST",
-      url: `${m.baseUrl}/api/offramp/orders`,
-      headers: { Authorization: `Bearer ${m.apiKey}`, "Idempotency-Key": reference },
-      body: JSON.stringify(
-        minisendOrderBody(recipient, quote.sendAmount, m.refundAddress, reference),
-      ),
-      transactionId,
-    });
-    if (!r.data?.order_id) throw new Error(`Minisend refused the order (HTTP ${r.status}).`);
-    return { partnerRef: r.data.order_id, simulated: false };
-  },
-  async collect(input) {
-    const m = env.minisend;
-    if (!m) return offline("minisend").collect(input);
-    if (input.rail !== "stablecoin") throw new Error("Minisend collects USDC only.");
-    // The payer's USDC goes to the order's deposit address; Minisend pays the business directly.
-    const r = await partnerFetch<{
-      order_id?: string;
-      deposit_address?: string;
-      total_deposit_usdc?: number;
-      expires_at?: string;
-    }>({
-      partner: "minisend",
-      method: "POST",
-      url: `${m.baseUrl}/api/offramp/orders`,
-      headers: { Authorization: `Bearer ${m.apiKey}`, "Idempotency-Key": input.reference },
-      body: JSON.stringify(
-        minisendOrderBody(input.payoutTo, input.quote.sendAmount, m.refundAddress, input.reference),
-      ),
-      transactionId: input.transactionId,
-    });
-    if (!r.data?.deposit_address)
-      throw new Error(`Minisend did not return a deposit address (HTTP ${r.status}).`);
-    return {
-      kind: "stablecoin",
-      token: "USDC",
-      network: "Base",
-      address: r.data.deposit_address,
-      amount: r.data.total_deposit_usdc ?? input.quote.sendAmount,
-      expiresAt: r.data.expires_at ?? null,
-      simulated: false,
-    };
-  },
-};
-
-/* ---------------------------------- Payaza -------------------------------- */
-// Payaza publishes no quote endpoint and converts nothing; its same-currency
-// collections run through the existing pay page. Here it competes on
-// same-currency payouts using its fee schedule.
-
-const payaza: Adapter = {
-  id: "payaza",
-  configured: () => true,
-  async quote(req, basis) {
-    if (req.from.currency !== req.to.currency) return null;
-    return estimateQuote("payaza", req, basis);
-  },
-  async payout({ reference }) {
-    if (env.payazaSimulatePayouts || sandbox()) {
-      simulatedFailure("payaza");
-      return { partnerRef: `SIM-PAYAZA-${reference}`, simulated: true };
-    }
-    throw new Error("Routed Payaza payouts go through the collection flow's Transfers call.");
-  },
-  async collect() {
-    throw new Error("Payaza collections run through the pay page's own methods.");
-  },
-};
-
 export const ADAPTERS: Record<ProviderId, Adapter> = {
-  payaza,
   kotani,
   yellowcard,
   klasha,
-  minisend,
 };

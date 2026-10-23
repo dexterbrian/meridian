@@ -3,10 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
   parseKlashaWebhook,
   parseKotaniWebhook,
-  parseMinisendWebhook,
   parseYellowCardWebhook,
   verifyKotaniWebhook,
-  verifyMinisendWebhook,
   verifyYellowCardWebhook,
 } from "./partner-webhooks";
 
@@ -52,45 +50,6 @@ describe("Yellow Card webhook", () => {
   });
 });
 
-describe("Minisend webhook", () => {
-  const raw = JSON.stringify({
-    event: "offramp.completed",
-    order_id: "o-1",
-    external_reference: "MRD-ABCDEFGH-1",
-    status: "completed",
-  });
-
-  it("accepts the timestamped V2 signature within five minutes only", async () => {
-    const t = 1_800_000_000;
-    const v2 = `t=${t},v1=${hmac("w", `${t}.${raw}`, "hex")}`;
-    expect(await verifyMinisendWebhook(raw, { v1: null, v2 }, "w", t + 60)).toBe(true);
-    expect(await verifyMinisendWebhook(raw, { v1: null, v2 }, "w", t + 301)).toBe(false);
-    expect(await verifyMinisendWebhook(raw.replace("o-1", "o-2"), { v1: null, v2 }, "w", t)).toBe(
-      false,
-    );
-  });
-
-  it("falls back to the V1 signature of the raw body", async () => {
-    expect(await verifyMinisendWebhook(raw, { v1: hmac("w", raw, "hex"), v2: null }, "w")).toBe(
-      true,
-    );
-    expect(await verifyMinisendWebhook(raw, { v1: null, v2: null }, "w")).toBe(false);
-  });
-
-  it("reads completed, failed and expired orders", () => {
-    expect(parseMinisendWebhook(JSON.parse(raw))).toMatchObject({
-      reference: "MRD-ABCDEFGH-1",
-      stage: "both",
-      outcome: "success",
-      key: "minisend:o-1:offramp.completed",
-    });
-    expect(parseMinisendWebhook({ event: "offramp.expired", order_id: "o-1" })?.outcome).toBe(
-      "failed",
-    );
-    expect(parseMinisendWebhook({ event: "checkout.completed" })).toBeNull();
-  });
-});
-
 describe("Kotani webhook", () => {
   const body = {
     event: "transaction.withdrawal.status.updated",
@@ -105,13 +64,15 @@ describe("Kotani webhook", () => {
     ).toBe(false);
   });
 
-  it("reads an offramp as one order that takes the USDC and pays out", () => {
+  it("ignores an event that is neither money in nor money out", () => {
+    // Meridian takes ordinary money in and pays ordinary money out, so a crypto
+    // offramp event is not ours to act on.
     expect(
       parseKotaniWebhook({
         event: "transaction.offramp.status.updated",
         data: { referenceId: "MRD-ABCDEFGH-1", status: "SUCCESSFUL" },
       }),
-    ).toMatchObject({ stage: "both", outcome: "success" });
+    ).toBeNull();
   });
 
   it("reads withdrawals as payouts (camelCase) and deposits as payins (snake_case)", () => {

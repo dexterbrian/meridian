@@ -179,7 +179,7 @@ const isoCurrency = z
   .trim()
   .toUpperCase()
   .regex(/^[A-Z]{3}$/, "Pick a currency");
-const rail = z.enum(["momo", "bank", "card", "virtual_account", "stablecoin", "wallet"]);
+const rail = z.enum(["momo", "bank", "card", "virtual_account", "wallet"]);
 
 /** A payer paying a request in another currency, through a routed provider. */
 export const routedPaySchema = z.object({

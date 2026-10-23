@@ -1,5 +1,5 @@
-// Request builders and reply parsers for Kotani Pay, Yellow Card, Klasha and
-// Minisend, written to each provider's docs. Pure (WebCrypto only), so they run
+// Request builders and reply parsers for Kotani Pay, Yellow Card and Klasha,
+// written to each provider's docs. Pure (WebCrypto only), so they run
 // on Node and Workers and are unit tested; the HTTP calls live in src/server/partners.
 //
 // None of these have been run against the providers' live sandboxes yet: Meridian
@@ -142,33 +142,6 @@ export function kotaniQuote(input: {
   });
 }
 
-/* --------------------------------- Minisend ------------------------------- */
-// docs.minisend.xyz/api-reference/offramp/quote: POST /api/offramp/quote
-// {amount (USDC), currency} -> {amount_usdc, rate, amount_local, fee, recipient_amount, expires_at}.
-
-export type MinisendOfframpQuote = {
-  amount_usdc: number;
-  currency: string;
-  rate: number;
-  amount_local: number;
-  fee: number;
-  recipient_amount: number;
-  expires_at: string;
-};
-
-export function minisendQuote(input: { reply: MinisendOfframpQuote; basis: Basis }): RouteQuote {
-  return withCost({
-    provider: "minisend",
-    sendCurrency: "USD",
-    sendAmount: round2(input.reply.amount_usdc),
-    receiveCurrency: input.reply.currency,
-    receiveAmount: round2(input.reply.recipient_amount),
-    estimated: false,
-    basis: input.basis,
-    expiresAt: input.reply.expires_at,
-  });
-}
-
 /* ---------------------------------- Klasha -------------------------------- */
 // developers.klasha.com/transfers/klasha-wire-api: POST /wallet/wire/generate/quote
 // {sourceCurrency, destinationCurrency, beneficiary, destinationAmount} ->
@@ -228,24 +201,78 @@ export type Recipient = {
   email?: string;
 };
 
-/** Kotani mobile money or bank withdrawal body (withdrawals/mobile-money, withdrawals/bank-v2). */
+/**
+ * Kotani's mobile money endpoints work through a saved customer, not inline
+ * phone details. This builds that customer. The field names come from Kotani's
+ * docs; the endpoint itself has not been reached yet (their access hold).
+ */
+export function kotaniCustomerBody(input: {
+  country: string;
+  phoneNumber: string;
+  network: string | undefined;
+  accountName: string;
+}) {
+  return {
+    path: "/customer/mobile-money",
+    body: {
+      country: input.country,
+      phoneNumber: input.phoneNumber,
+      network: kotaniNetwork(input.network),
+      accountName: input.accountName,
+    },
+  };
+}
+
+/**
+ * Taking money from a payer by mobile money: Kotani prompts the phone and
+ * credits Meridian's wallet in that currency.
+ *
+ * The required fields are the ones Kotani's own validation named on
+ * 23 October 2026: a customer key, an amount and a wallet id (snake_case here,
+ * camelCase on the withdrawal below — their naming, not ours). The reference and
+ * callback names are from the docs and still unconfirmed.
+ */
+export function kotaniDepositBody(input: {
+  customerKey: string;
+  amount: number;
+  walletId: string;
+  referenceId: string;
+  callbackUrl: string;
+}) {
+  return {
+    path: "/deposit/mobile-money",
+    body: {
+      customer_key: input.customerKey,
+      amount: input.amount,
+      wallet_id: input.walletId,
+      reference_id: input.referenceId,
+      callback_url: input.callbackUrl,
+    },
+  };
+}
+
+/**
+ * Paying a recipient out. Mobile money pays a saved customer from Meridian's
+ * wallet (fields per Kotani's validation, 23 October 2026). A bank payout takes
+ * the account inline and no wallet.
+ */
 export function kotaniPayoutBody(
   r: Recipient,
   amount: number,
   referenceId: string,
   callbackUrl: string,
+  momo?: { customerKey: string; walletId: string },
 ) {
   if (r.rail === "momo") {
+    if (!momo) throw new Error("A Kotani mobile money payout needs a customer and a wallet.");
     return {
       path: "/withdraw/mobile-money",
       body: {
+        customer_key: momo.customerKey,
         amount,
-        currency: r.currency,
+        walletId: momo.walletId,
         referenceId,
         callbackUrl,
-        phoneNumber: r.accountNumber,
-        network: r.network,
-        accountName: r.name,
       },
     };
   }
@@ -267,47 +294,7 @@ export function kotaniPayoutBody(
   };
 }
 
-/**
- * Kotani offramp (POST /offramp, checked 4 October 2026): the payer sends USDC
- * to the escrow address in the reply, and Kotani pays the recipient in fiat
- * within the same order.
- */
-export function kotaniOfframpBody(input: {
-  r: Recipient;
-  usdc: number;
-  referenceId: string;
-  callbackUrl: string;
-}) {
-  const { r } = input;
-  return {
-    cryptoAmount: input.usdc,
-    currency: r.currency,
-    chain: "BASE",
-    token: "USDC",
-    referenceId: input.referenceId,
-    callbackUrl: input.callbackUrl,
-    ...(r.rail === "momo"
-      ? {
-          mobileMoneyReceiver: {
-            phoneNumber: r.accountNumber,
-            accountName: r.name,
-            networkProvider: kotaniNetwork(r.network),
-          },
-        }
-      : {
-          bankReceiver: {
-            name: r.name,
-            address: r.address ?? "",
-            bankCode: r.bankCode ?? "",
-            accountNumber: r.accountNumber,
-            country: r.country,
-            bankName: r.bankName,
-          },
-        }),
-  };
-}
-
-/** Kotani's offramp names networks MPESA, MTN, AIRTEL or VODAFONE. */
+/** Kotani names networks MPESA, MTN, AIRTEL, VODACOM, VODAFONE and so on. */
 export function kotaniNetwork(network: string | undefined): string | undefined {
   if (!network) return undefined;
   // The names Kotani's own country list returns, read on 13 October 2026.
@@ -374,51 +361,10 @@ export function klashaBeneficiaryBody(r: Recipient) {
   };
 }
 
-/** Minisend offramp order (offramp/create-order). */
-/** Minisend names networks by operator ("Safaricom"); ours may be "MPESA" or a Payaza code. */
-export function minisendNetwork(network: string | undefined): string | undefined {
-  if (!network) return undefined;
-  if (/mpesa|m-pesa|saf/i.test(network)) return "Safaricom";
-  if (/airtel/i.test(network)) return "Airtel";
-  if (/mtn/i.test(network)) return "MTN";
-  return network;
-}
-
-export function minisendOrderBody(
-  r: Recipient,
-  amountUsdc: number,
-  refundAddress: string,
-  reference: string,
-) {
-  return {
-    amount: amountUsdc,
-    currency: r.currency,
-    refund_address: refundAddress,
-    reference,
-    // Field names per Minisend's create-order reference (checked 4 October 2026).
-    recipient:
-      r.rail === "momo"
-        ? {
-            method: "MOBILE",
-            phone: r.accountNumber,
-            mobile_network: minisendNetwork(r.network),
-            account_name: r.name,
-          }
-        : {
-            method: "BANK",
-            account_number: r.accountNumber,
-            institution: r.bankCode,
-            account_name: r.name,
-          },
-  };
-}
-
 export const PROVIDER_REFERENCE_PREFIX: Record<ProviderId, string> = {
-  payaza: "MRDP",
   kotani: "MRDK",
   yellowcard: "MRDY",
   klasha: "MRDW",
-  minisend: "MRDM",
 };
 
 function round2(n: number) {

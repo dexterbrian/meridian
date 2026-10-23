@@ -3,16 +3,14 @@ import { expect, test, type Page } from "@playwright/test";
 import { ENABLED_PROVIDERS } from "../src/lib/providers";
 
 // Kotani Pay is the only routed provider switched on (ENABLED_PROVIDERS in
-// src/lib/providers.ts), so these tests follow a payment it carries on its own
-// and check that nothing a switched-off provider would carry is ever offered.
-// The tests for a second provider taking over come back with that provider.
+// src/lib/providers.ts), so these tests follow a payment it carries on its own.
+// Money goes in as ordinary currency and comes out as ordinary currency: there
+// is no crypto anywhere in the product, whoever is switched on.
 
-/** Clicks until the page reacts: the first load of a dev server can be slow to hydrate. */
-async function clickUntil(page: Page, button: string, visible: string) {
-  await expect(async () => {
-    await page.getByRole("button", { name: button }).click();
-    await expect(page.getByText(visible)).toBeVisible({ timeout: 1000 });
-  }).toPass({ timeout: 30_000 });
+/** Waits for the pay page to be ready: the first load of a dev server can be slow. */
+async function payPageReady(page: Page) {
+  await expect(page.getByLabel("Currency and way to pay")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("No provider collects yen or yuan yet")).toBeVisible();
 }
 
 const data = () =>
@@ -26,17 +24,15 @@ test.describe("public pages", () => {
 });
 
 test.describe("paying a KES request in another currency", () => {
-  test("a payer abroad pays in USDC through Kotani; the business gets the exact amount", async ({
+  test("a buyer in Ghana pays cedis by mobile money; the business gets the exact shillings", async ({
     page,
   }) => {
     await page.goto(`/pay/${data().requests[0]}`);
-    await clickUntil(
-      page,
-      "Paying from abroad or in another currency?",
-      "No provider collects yen or yuan yet",
-    );
+    await payPageReady(page);
 
-    await page.getByLabel("Currency and way to pay").selectOption({ label: "USD · USDC / USDT" });
+    await page
+      .getByLabel("Currency and way to pay")
+      .selectOption({ label: "GHS · Mobile money (Ghana)" });
     const quotes = page.getByTestId("route-quote");
     await expect(quotes).toHaveCount(1);
     await expect(quotes.first()).toHaveAttribute("data-provider", "kotani");
@@ -44,33 +40,36 @@ test.describe("paying a KES request in another currency", () => {
     await expect(quotes.first()).not.toContainText("Cheapest");
     await expect(quotes.first()).toContainText("KES 129,000.00 arrives");
 
-    await page.getByLabel("Your name").fill("Hans Müller");
-    await page.getByLabel("Email").fill("hans@example.test");
+    await page.getByLabel("Your name").fill("Kwame Mensah");
+    await page.getByLabel("Email").fill("kwame@example.test");
+    await page.getByLabel("Your country").selectOption("GH");
+    await page.getByLabel("Phone").fill("233244123456");
     await page.getByRole("button", { name: /^Pay .* with Kotani Pay$/ }).click();
 
     const box = page.getByTestId("routed-payin");
-    await expect(box).toContainText("USDC");
+    await expect(box).toContainText("Approve the prompt on your phone");
     await expect(box).toContainText("Carried by Kotani Pay");
     await page.getByRole("button", { name: "Simulate the payment arriving" }).click();
     await expect(page.getByRole("heading", { name: "Paid and settled" })).toBeVisible();
     await expect(page.getByText("KES 129,000.00 reached Kilimo Fresh Exports Ltd")).toBeVisible();
   });
 
-  test("a payer is only offered currencies a switched-on provider can take", async ({ page }) => {
+  test("a payer is only offered real currencies a switched-on provider can take", async ({
+    page,
+  }) => {
     await page.goto(`/pay/${data().requests[1]}`);
-    await clickUntil(
-      page,
-      "Paying from abroad or in another currency?",
-      "No provider collects yen or yuan yet",
-    );
+    await payPageReady(page);
     const choices = page.getByLabel("Currency and way to pay");
+    // No crypto is offered to anyone, ever.
+    await expect(choices).not.toContainText("USDC");
+    await expect(choices).not.toContainText("USDT");
     // Euros from abroad are Yellow Card's, and it is switched off.
     await expect(choices.getByRole("option", { name: /^EUR/ })).toHaveCount(0);
-    // What Kotani collects is there: dollars on-chain, and cedis by mobile money.
-    await expect(choices.getByRole("option", { name: "USD · USDC / USDT" })).toHaveCount(1);
+    // What Kotani collects is there: African local currencies by mobile money.
     await expect(choices.getByRole("option", { name: /^GHS · Mobile money/ })).toHaveCount(1);
-    // The note about yen and yuan names a way to pay that actually works today.
-    await expect(page.getByText("Pay in USD instead: usdc / usdt.")).toBeVisible();
+    await expect(choices.getByRole("option", { name: /^ZAR · Bank account/ })).toHaveCount(1);
+    // With no dollar route open, the note says so instead of naming one.
+    await expect(page.getByText("Ask the business for another way to pay.")).toBeVisible();
   });
 });
 
@@ -144,6 +143,13 @@ test.describe("sending money to suppliers", () => {
     await expect(page.getByTestId("transfer-list")).toContainText("Accra Packaging Ltd");
   });
 
+  test("a business is only offered real ways to fund a transfer", async ({ page }) => {
+    await page.goto("/app/send");
+    const from = page.getByLabel("Pay from");
+    await expect(from).not.toContainText("USDC");
+    await expect(from.getByRole("option", { name: /KES · Mobile money/ })).toHaveCount(1);
+  });
+
   test("a business cannot pick a country no switched-on provider pays", async ({ page }) => {
     await page.goto("/app/send");
     await expect(async () => {
@@ -157,7 +163,7 @@ test.describe("sending money to suppliers", () => {
     await expect(countries.getByRole("option", { name: "Ghana" })).toHaveCount(1);
   });
 
-  test("the switched-off providers stay out of the list", async () => {
-    expect([...ENABLED_PROVIDERS].sort()).toEqual(["kotani", "payaza"]);
+  test("Kotani Pay is the only provider money can go through", async () => {
+    expect([...ENABLED_PROVIDERS]).toEqual(["kotani"]);
   });
 });

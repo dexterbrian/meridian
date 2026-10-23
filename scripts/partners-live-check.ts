@@ -54,16 +54,6 @@ const CHECKS: { provider: ProviderId; why: string; req: RouteRequest }[] = [
       side: "receive",
     },
   },
-  {
-    provider: "minisend",
-    why: "Chris: buyer abroad pays USDC, Chris gets KES",
-    req: {
-      from: { currency: "USD", rail: "stablecoin" },
-      to: { currency: "KES", rail: "momo", country: "KE" },
-      amount: 129000,
-      side: "receive",
-    },
-  },
 ];
 
 let failed = 0;

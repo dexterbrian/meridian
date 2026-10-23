@@ -58,7 +58,6 @@ export type EventSource =
   | "kotani_webhook"
   | "yellowcard_webhook"
   | "klasha_webhook"
-  | "minisend_webhook"
   | "admin"
   | "job";
 
@@ -98,8 +97,8 @@ export type PayinDetails =
       lastName: string;
       phone: string;
     }
-  // Routed providers (Yellow Card, Kotani, Minisend ...): international bank
-  // transfer into a virtual account, USDC to an address, or a wallet prompt.
+  // Routed providers (Kotani, Yellow Card, Klasha): an international bank
+  // transfer into a virtual account, or a prompt on the payer's phone.
   | PayinInstructions;
 
 export class CollectError extends Error {

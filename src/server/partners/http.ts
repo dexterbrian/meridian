@@ -3,9 +3,9 @@ import type { Json } from "~/lib/database.types";
 import { redact } from "~/lib/redact";
 import { supabaseAdmin } from "../supabase";
 
-// One logged HTTP call to a routed provider (Kotani, Yellow Card, Klasha,
-// Minisend). Same shape as payazaCall: every call lands in partner_calls with
-// secrets stripped, whatever happened.
+// One logged HTTP call to a routed provider (Kotani, Yellow Card, Klasha). Same
+// shape as payazaCall: every call lands in partner_calls with secrets stripped,
+// whatever happened.
 
 export type PartnerResult<T> = { ok: boolean; status: number; data: T | null; text: string | null };
 

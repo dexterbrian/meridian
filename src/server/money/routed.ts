@@ -33,7 +33,7 @@ import {
 } from "./collect";
 import { planRoute } from "./router";
 
-// Payments carried by a routed provider (Kotani, Yellow Card, Klasha, Minisend),
+// Payments carried by a routed provider (Kotani, Yellow Card, Klasha),
 // in both directions:
 //  - a payer abroad or in another African currency pays a Meridian request, and
 //    the business still receives the exact request amount in its own currency;
@@ -157,23 +157,15 @@ async function openWithFallback(
         reference: tx.reference,
         payoutTo,
         transactionId: tx.id,
+        payer: {
+          name: tx.payer_name ?? "Payer",
+          phone: tx.payer_phone,
+          country: tx.payer_country,
+        },
       }),
     );
     const q = quote as PricedQuote;
-    // A live USDC order (Kotani, Minisend) takes the deposit and pays the
-    // recipient in one go, so the payer must send exactly the provider's amount
-    // and Meridian has nowhere to keep its 1%. Until there's a way to collect
-    // it (an open decision, TRD 4.4c), these payments carry no Meridian fee and
-    // say so.
-    const oneOrder = result.kind === "stablecoin" && !result.simulated;
-    const price = oneOrder
-      ? {
-          amount: q.price.amount,
-          providerFee: Math.round((result.amount - q.price.amount) * 100) / 100,
-          meridianFee: 0,
-          total: result.amount,
-        }
-      : q.price;
+    const price = q.price;
     const payin: PayinInstructions = { ...result, amount: price.total };
     const next = await transition(
       tx,
@@ -190,12 +182,7 @@ async function openWithFallback(
         usd_equivalent: toUsd(price.total, q.sendCurrency),
         payin_details: payin as unknown as NonNullable<Json>,
         quote_expires_at: q.expiresAt,
-        quote: {
-          ...stored,
-          chosen: q.provider,
-          attempts,
-          ...(oneOrder ? { meridianFeeNotCollected: true } : {}),
-        } as unknown as NonNullable<Json>,
+        quote: { ...stored, chosen: q.provider, attempts } as unknown as NonNullable<Json>,
       },
       { source, payload: { provider: q.provider, attempts, simulated: result.simulated } },
     );
@@ -430,12 +417,10 @@ export async function createTransfer(businessId: string, input: TransferInput): 
       hits.find((h) => h.action === "block")?.message ?? "Blocked by a check.",
     );
   }
+  // A hold stops the payout after the business pays in. Every provider takes the
+  // money in first and pays out second, so any of them can be held.
   const holdForReview = strongestAction(hits) === "hold";
-  // A hold stops the payout after the business pays in. Minisend pays the
-  // recipient within the same order as the deposit, so it cannot be held.
-  const plan = holdForReview
-    ? { ...quoted, quotes: quoted.quotes.filter((q) => q.provider !== "minisend") }
-    : quoted;
+  const plan = quoted;
   const top = plan.quotes[0];
   if (!top)
     throw new CollectError(
@@ -466,6 +451,8 @@ export async function createTransfer(businessId: string, input: TransferInput): 
       payer_name: business.trading_name || business.name,
       payer_email: business.contact_email,
       payer_country: business.country,
+      // Funding by mobile money prompts this number.
+      payer_phone: business.contact_phone,
       quote: { routed: true, plan, holdForReview } as unknown as NonNullable<Json>,
     })
     .select()
@@ -698,8 +685,7 @@ export async function handleRoutedEvent(
   if (e.outcome === "pending") return "ok";
   const name = providerProfile(e.provider).name;
 
-  const payin = e.stage === "payin" || (e.stage === "both" && tx.status === "awaiting_payin");
-  if (payin) {
+  if (e.stage === "payin") {
     if (tx.status !== "awaiting_payin") return "ignored";
     if (e.outcome === "failed") {
       await transition(
@@ -711,28 +697,7 @@ export async function handleRoutedEvent(
       );
       return "ok";
     }
-    if (e.stage === "payin") {
-      await routedPayinReceived(tx, source, { simulated: false, payload });
-      return "ok";
-    }
-    // One order took the money and paid the recipient (Minisend).
-    const collected = await transition(
-      tx,
-      "awaiting_payin",
-      "collected",
-      { collected_at: new Date().toISOString() },
-      { source, payload },
-    );
-    const paying = collected
-      ? await transition(
-          collected,
-          "collected",
-          "paying_out",
-          { payout_reference: `${tx.reference}-P`, partner_out_ref: e.partnerRef },
-          { source, payload },
-        )
-      : null;
-    if (paying) await finish(paying, source, false);
+    await routedPayinReceived(tx, source, { simulated: false, payload });
     return "ok";
   }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ENABLED_PROVIDERS,
+  PROVIDERS,
   PROVIDER_IDS,
   funderOptions,
   payerOptions,
@@ -39,12 +40,12 @@ describe("providersFor: which providers can carry a payment", () => {
     expect(ids(m)).not.toContain("payaza");
   });
 
-  it("same currency in Kenya: Payaza joins the candidates", () => {
+  it("same currency in Kenya: Kotani and Yellow Card can both carry it", () => {
     const m = covering(
       { currency: "KES", rail: "momo", country: "KE" },
       { currency: "KES", rail: "momo", country: "KE" },
     );
-    expect(ids(m)).toEqual(expect.arrayContaining(["payaza", "kotani", "yellowcard", "minisend"]));
+    expect(ids(m)).toEqual(expect.arrayContaining(["kotani", "yellowcard"]));
   });
 
   it("Europe to Africa: a EUR buyer pays by SEPA into a Yellow Card virtual account", () => {
@@ -55,7 +56,7 @@ describe("providersFor: which providers can carry a payment", () => {
     expect(ids(m)).toEqual(["yellowcard"]);
   });
 
-  it("Middle East or anywhere to Africa in USD: virtual account or stablecoin", () => {
+  it("Middle East or anywhere to Africa in USD: an international bank transfer", () => {
     expect(
       ids(
         covering(
@@ -64,14 +65,14 @@ describe("providersFor: which providers can carry a payment", () => {
         ),
       ),
     ).toEqual(["yellowcard"]);
-    expect(
-      ids(
-        covering(
-          { currency: "USD", rail: "stablecoin" },
-          { currency: "KES", rail: "momo", country: "KE" },
-        ),
-      ),
-    ).toEqual(expect.arrayContaining(["kotani", "minisend"]));
+  });
+
+  it("nobody is offered a crypto rail: ordinary money in, ordinary money out", () => {
+    for (const p of PROVIDERS) {
+      for (const c of [...p.collect, ...p.payout]) {
+        expect(c.rails).not.toContain("stablecoin" as never);
+      }
+    }
   });
 
   it("Africa to China and Japan: only Klasha pays CNY and JPY", () => {
@@ -159,7 +160,7 @@ describe("estimates and costs", () => {
 
   it("adds cost to a live quote against the mid-market reference", () => {
     const q = withCost({
-      provider: "minisend",
+      provider: "klasha",
       sendCurrency: "USD",
       sendAmount: 100,
       receiveCurrency: "KES",
@@ -189,14 +190,14 @@ describe("rankQuotes: cheapest first, the rest as fallbacks", () => {
     };
     const good: RouteQuote = {
       ...junk,
-      provider: "minisend",
+      provider: "klasha",
       sendAmount: 15588.14,
       receiveAmount: 129000,
       cost: 100,
       costPct: 0.006,
     };
     const ranked = rankQuotes([junk, good], "receive");
-    expect(ranked.map((q) => q.provider)).toEqual(["minisend"]);
+    expect(ranked.map((q) => q.provider)).toEqual(["klasha"]);
   });
 
   const base = {
@@ -216,15 +217,15 @@ describe("rankQuotes: cheapest first, the rest as fallbacks", () => {
 
   it("with the recipient's amount fixed, the smallest payer total wins", () => {
     const r = rankQuotes(
-      [q("kotani", 1050, 1000), q("yellowcard", 1020, 1000), q("payaza", 1030, 1000)],
+      [q("kotani", 1050, 1000), q("yellowcard", 1020, 1000), q("klasha", 1030, 1000)],
       "receive",
     );
-    expect(ids(r)).toEqual(["yellowcard", "payaza", "kotani"]);
+    expect(ids(r)).toEqual(["yellowcard", "klasha", "kotani"]);
   });
 
   it("with the payer's amount fixed, the biggest delivery wins", () => {
-    const r = rankQuotes([q("kotani", 1000, 950), q("minisend", 1000, 980)], "send");
-    expect(ids(r)).toEqual(["minisend", "kotani"]);
+    const r = rankQuotes([q("kotani", 1000, 950), q("klasha", 1000, 980)], "send");
+    expect(ids(r)).toEqual(["klasha", "kotani"]);
   });
 
   it("breaks ties by documented first, then registry order", () => {
@@ -255,7 +256,7 @@ describe("rankQuotes: cheapest first, the rest as fallbacks", () => {
 });
 
 describe("executeWithFallback", () => {
-  const quotes = (["yellowcard", "kotani", "minisend"] as const).map(
+  const quotes = (["yellowcard", "kotani", "klasha"] as const).map(
     (provider) =>
       ({
         provider,
@@ -312,12 +313,13 @@ describe("executeWithFallback", () => {
 describe("payerOptions: other ways to pay a business", () => {
   const kes = { currency: "KES", rail: "momo" as const, country: "KE" };
 
-  it("offers international bank transfer and USDC first, never the business's own currency", () => {
+  it("offers international bank transfer first, and the business's own currency too", () => {
     const opts = payerOptions(kes, PROVIDER_IDS);
-    expect(opts.slice(0, 2).map((o) => o.currency)).toEqual(["USD", "USD"]);
+    expect(opts[0]).toMatchObject({ currency: "USD", rail: "virtual_account" });
     expect(opts.some((o) => o.currency === "EUR" && o.rail === "virtual_account")).toBe(true);
     expect(opts.some((o) => o.currency === "GHS" && o.rail === "momo")).toBe(true);
-    expect(opts.some((o) => o.currency === "KES")).toBe(false);
+    // A payer in Kenya pays shillings through a provider like everyone else.
+    expect(opts.some((o) => o.currency === "KES" && o.rail === "momo")).toBe(true);
   });
 
   it("has no JPY or CNY option: no provider collects them", () => {
@@ -356,11 +358,11 @@ describe("priceRoute: what the payer is asked for", () => {
 });
 
 describe("funderOptions: how a business pays for a transfer", () => {
-  it("a Kenyan business pays from KES mobile money or bank first, then USD/EUR accounts and USDC", () => {
+  it("a Kenyan business pays from KES mobile money or bank first, then USD/EUR accounts", () => {
     const opts = funderOptions("KE", PROVIDER_IDS);
     expect(opts[0]).toMatchObject({ currency: "KES", country: "KE" });
     expect(opts.some((o) => o.currency === "EUR" && o.rail === "virtual_account")).toBe(true);
-    expect(opts.some((o) => o.currency === "USD" && o.rail === "stablecoin")).toBe(true);
+    expect(opts.some((o) => o.rail === ("stablecoin" as never))).toBe(false);
     expect(opts.some((o) => o.rail === "card")).toBe(false);
     expect(opts.some((o) => o.currency === "NGN")).toBe(false);
   });
@@ -369,8 +371,8 @@ describe("funderOptions: how a business pays for a transfer", () => {
 describe("the switch: only the providers that are on carry money", () => {
   const kes = { currency: "KES", rail: "momo" as const, country: "KE" };
 
-  it("is Payaza and Kotani today, and nobody else", () => {
-    expect([...ENABLED_PROVIDERS].sort()).toEqual(["kotani", "payaza"]);
+  it("is Kotani Pay today, and nobody else", () => {
+    expect([...ENABLED_PROVIDERS]).toEqual(["kotani"]);
   });
 
   it("a route a switched-off provider would carry has no candidates", () => {
@@ -385,7 +387,9 @@ describe("the switch: only the providers that are on carry money", () => {
     expect(ids(providersFor({ currency: "GHS", rail: "momo", country: "GH" }, kes))).toEqual([
       "kotani",
     ]);
-    expect(ids(providersFor({ currency: "USD", rail: "stablecoin" }, kes))).toEqual(["kotani"]);
+    expect(ids(providersFor({ currency: "KES", rail: "momo", country: "KE" }, kes))).toEqual([
+      "kotani",
+    ]);
   });
 
   it("never offers a payer a way to pay that nobody switched on can take", () => {
