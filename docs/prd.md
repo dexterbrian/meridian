@@ -123,6 +123,17 @@ Hard-coded partner fees (bank 1%, momo 2%, card 2.5%), Meridian 1%, and a 0.35% 
 - **Minisend** turns USDC into KES, NGN, GHS or UGX. Its published fee is about 1%.
 - **Nobody collects yen or yuan.** A buyer in Japan or China pays in USD or USDC.
 
+**Update, 23 October 2026: only Kotani Pay is switched on.** Yellow Card, Klasha and Minisend are built and tested, but their business checks are not done and we have no keys, so they are switched off. A payer is only offered a way to pay that Kotani can take, and a business is only offered a country Kotani pays. Until the others come back:
+
+| Customer | What works today | What is waiting |
+|---|---|---|
+| Chris (avocados) | A buyer anywhere pays in USDC, Chris gets exact shillings | Euros and dollars by bank transfer need Yellow Card |
+| Ann (flowers) | Buyers in Ghana and Côte d'Ivoire pay in local mobile money | Nigeria needs Yellow Card; Kotani does not do Nigeria |
+| McLoud, Phillip | Nothing | China and Japan need Klasha |
+| AfricaHackon | A customer anywhere pays in USDC | Unchanged: no provider lists South Sudan |
+
+The switch is one list in the code (`ENABLED_PROVIDERS` in `src/lib/providers.ts`). Adding an id back turns that provider on everywhere at once.
+
 What this means for the customers:
 
 | Customer | Need | Route today |

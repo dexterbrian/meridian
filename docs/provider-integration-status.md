@@ -3,51 +3,82 @@
 | Field | Value |
 |---|---|
 | Branch | `feat/multi-partner-routing` |
-| Last tested | 13 October 2026 |
-| How to re-run | `npm run partners:check` (asks each provider with keys for a live price; nothing pays) |
+| Last tested | 23 October 2026 |
+| How to re-run | `npm run partners:check` (asks each switched-on provider for a live price; nothing pays) |
 
 Meridian asks every provider that can carry a payment for a price, uses the
 cheapest and keeps the rest as backups. This file records what has actually been
 run against each provider, as opposed to built from their documentation.
 
-| Provider | Keys | Reached live | Prices live | Blocking it |
-|---|---|---|---|---|
-| Kotani Pay | sandbox, 11 October 2026 | Yes | No | Their account has no money services switched on |
-| Yellow Card | none | — | — | Needs sandbox keys |
-| Klasha | none | — | — | Needs sandbox credentials |
-| Minisend | none | — | — | Needs a sandbox key |
-| Payaza | live and test | Yes (earlier work) | Same-currency only | Converts nothing, so it only competes on same-currency routes |
+## Only Kotani Pay is switched on
+
+One list decides which providers may carry money: `ENABLED_PROVIDERS` in
+`src/lib/providers.ts`. Today it holds Payaza, which has always carried
+same-currency payments, and Kotani Pay. Yellow Card, Klasha and Minisend are
+built and unit-tested but switched off until their business checks and sandbox
+keys are done.
+
+Switching one off is not just a routing rule. A payer is never shown a currency
+it would have collected, and a business cannot choose a country it would have
+paid, so nobody is offered a payment we cannot actually carry. With Kotani alone
+that means no euros from Europe, and no payouts to China or Japan.
+
+To turn one back on, add its id to that list. Nothing else changes: the adapter,
+the webhook route, the prices and the tests are already there.
+
+| Provider | Switched on | Keys | Reached live | Prices live | Blocking it |
+|---|---|---|---|---|---|
+| Kotani Pay | yes | sandbox, 11 October 2026 | Yes, until the hold below | No | No exchange rate is set up for any pair |
+| Yellow Card | no | none | — | — | Business checks, then sandbox keys |
+| Klasha | no | none | — | — | Business checks, then sandbox credentials |
+| Minisend | no | none | — | — | Business checks, then a sandbox key |
+| Payaza | yes | live and test | Yes (earlier work) | Same-currency only | Converts nothing, so it only competes on same-currency routes |
 
 ---
 
-## 1. Kotani Pay: tested live, 13 October 2026
+## 1. Kotani Pay
 
-The sandbox key pair works. Reference data comes back. Every endpoint that
-moves money is switched off for the account.
+### Where it stands, 23 October 2026
 
-### What was run
+Kotani switched services on for the account. Three of the five we need now
+answer; two are still off, and no exchange rate is configured, so Kotani still
+cannot price a payment.
 
-| Request | Result |
-|---|---|
-| `GET /health` | 200, `status: ok` |
-| `GET /api/v3/customer/support/countries` with the key | 200, 24 records (12 countries, each listed for paying in and paying out) |
-| The same with no key | 401, so the key really is being checked |
-| `POST /api/v3/rate/fiat` (GHS to KES) | 403, "The 'rates' service is not enabled for this account." |
-| `POST /api/v3/offramp` | 403, `offramp` and `offramp_mobile_money` not enabled |
-| `POST /api/v3/onramp` | 403, `onramp` not enabled |
-| `POST /api/v3/withdraw/mobile-money` and `/withdraw/v2/bank` | 403, `withdraw` not enabled |
-| `POST /api/v3/deposit/mobile-money` | 403, `deposit` not enabled |
+| Request | 13 October | 23 October |
+|---|---|---|
+| Ask for a rate, Ghana cedis to Kenyan shillings | Refused: rates not enabled | Reaches the service. Answers "Rate Not Supported" |
+| Take money in by mobile money | Refused: deposit not enabled | Works as far as we can test: it asks for a wallet and a customer |
+| Pay out by mobile money, and by bank | Refused: withdraw not enabled | Same: it asks for the account details |
+| Take the payer's USDC and pay out (offramp) | Refused: not enabled | Still refused |
+| Turn money into USDC (onramp) | Refused: not enabled | Still refused |
 
-Each write was sent with an empty body on purpose, so a working service would
-have answered with a validation error and created nothing.
+Two separate things come back when we ask for a rate. Dollars, euros and naira
+are rejected outright as currencies Kotani does not handle. Every pair of its
+own African currencies is accepted but has no rate set up. So the service is on
+and the account is allowed to use it, but there is nothing in it to quote from.
 
-### To ask Kotani to switch on
+### A hold on our network
 
-`rates`, `deposit`, `withdraw`, `onramp`, `offramp` and
-`offramp_mobile_money`, for the sandbox account whose key was issued on
-11 October 2026. Until `rates` is on, Meridian cannot get a Kotani price, so
-Kotani is listed to the payer as unavailable with Kotani's own wording, and
-another provider carries the payment.
+After about forty calls in a few minutes, mapping which pairs and which
+endpoints work, Kotani put a temporary block on us. Every request now comes back
+"Access from this device or network is temporarily restricted as a security
+precaution", including the country list that worked all morning. It is tied to
+the network, not the key. **Kotani need to lift it, quoting request id
+`1f4f8be6-ea17-4cb3-9c2b-525473c7ae71`.** `npm run partners:check` now reports
+this as a hold rather than a failure, so it is obvious when it is lifted.
+
+### What to ask Kotani
+
+1. Lift the access hold, quoting the request id above.
+2. Set up exchange rates for the pairs we need, starting with Ghana cedis to
+   Kenyan shillings and Kenyan shillings to Ghana cedis. Or tell us which pairs
+   the sandbox is meant to price.
+3. Switch on `offramp`, `offramp_mobile_money` and `onramp`. Without offramp a
+   payer abroad cannot pay by USDC, which is the only way Kotani reaches anyone
+   outside its eleven African countries.
+4. Confirm how the sandbox wallet works: paying in and paying out both want a
+   wallet id and a customer key, and tell us whether the account has a wallet in
+   each currency already.
 
 ### Three things the live test corrected in our code
 
@@ -68,7 +99,7 @@ another provider carries the payment.
 
 ### Their real coverage, from their own list
 
-Twelve countries, each for both paying in and paying out: Congo (CDF),
+Eleven countries, each for both paying in and paying out: Congo (CDF),
 Côte d'Ivoire and Senegal (XOF), Cameroon (XAF), Ghana (GHS), Kenya (KES),
 Rwanda (RWF), Sierra Leone (SLE), Tanzania (TZS), Uganda (UGX),
 South Africa (ZAR) and Zambia (ZMW).
@@ -76,6 +107,16 @@ South Africa (ZAR) and Zambia (ZMW).
 Two corrections to what we had assumed: **Kotani does not do Nigeria at all**,
 and it does cover Congo and Sierra Leone, which we had left out. Kenya and
 South Africa also accept bank and card payments, not only mobile money.
+
+### What is tested without them
+
+Nine browser tests and 161 unit tests run on every change, with Kotani as the
+only routed provider. They cover a payer abroad paying in USDC and the business
+receiving the exact shillings asked for, a Kenyan business paying a Ghanaian
+supplier in cedis, a signed Kotani webhook settling a payment and a forged one
+being refused, a large first payment to a new supplier being held for review,
+and the switch itself: no euro option for a payer, no China or Japan for a
+business. Prices in those runs are Kotani's published fees, not live quotes.
 
 ---
 
