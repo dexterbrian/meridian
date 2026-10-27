@@ -203,8 +203,9 @@ export type Recipient = {
 
 /**
  * Kotani's mobile money endpoints work through a saved customer, not inline
- * phone details. This builds that customer. The field names come from Kotani's
- * docs; the endpoint itself has not been reached yet (their access hold).
+ * phone details. This builds that customer. Field names from Kotani's OpenAPI
+ * spec (docs/kotani pay openapi.json): snake_case, with an ISO-2 country code.
+ * The reply carries the customer_key the deposit and withdrawal then use.
  */
 export function kotaniCustomerBody(input: {
   country: string;
@@ -215,10 +216,10 @@ export function kotaniCustomerBody(input: {
   return {
     path: "/customer/mobile-money",
     body: {
-      country: input.country,
-      phoneNumber: input.phoneNumber,
+      phone_number: input.phoneNumber,
+      country_code: input.country,
       network: kotaniNetwork(input.network),
-      accountName: input.accountName,
+      account_name: input.accountName,
     },
   };
 }
@@ -227,10 +228,10 @@ export function kotaniCustomerBody(input: {
  * Taking money from a payer by mobile money: Kotani prompts the phone and
  * credits Meridian's wallet in that currency.
  *
- * The required fields are the ones Kotani's own validation named on
- * 23 October 2026: a customer key, an amount and a wallet id (snake_case here,
- * camelCase on the withdrawal below — their naming, not ours). The reference and
- * callback names are from the docs and still unconfirmed.
+ * Field names as Kotani's OpenAPI spec gives them, and as its own validation
+ * named the required ones on 23 October 2026: a customer key, an amount and a
+ * wallet id. snake_case here, camelCase on the withdrawal below. Their naming,
+ * not ours.
  */
 export function kotaniDepositBody(input: {
   customerKey: string;
@@ -253,8 +254,9 @@ export function kotaniDepositBody(input: {
 
 /**
  * Paying a recipient out. Mobile money pays a saved customer from Meridian's
- * wallet (fields per Kotani's validation, 23 October 2026). A bank payout takes
- * the account inline and no wallet.
+ * wallet (fields per Kotani's spec and validation). A bank payout takes
+ * the account inline and no wallet. Kotani's spec says bank payouts only reach
+ * South African banks for now.
  */
 export function kotaniPayoutBody(
   r: Recipient,

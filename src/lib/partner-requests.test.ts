@@ -225,7 +225,13 @@ describe("payout bodies", () => {
       accountName: "Hans Müller",
     });
     expect(path).toBe("/customer/mobile-money");
-    expect(body).toMatchObject({ country: "KE", phoneNumber: "254712345678", network: "MPESA" });
+    // The spec's names, snake_case. Camel case was rejected by Kotani.
+    expect(body).toEqual({
+      phone_number: "254712345678",
+      country_code: "KE",
+      network: "MPESA",
+      account_name: "Hans Müller",
+    });
   });
 
   it("Yellow Card: destination carries account type, IBAN when given, and business sender", () => {
