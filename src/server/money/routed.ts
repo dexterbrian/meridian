@@ -668,12 +668,14 @@ async function findForEvent(e: RoutedEvent): Promise<Tx | null> {
 export async function handleRoutedEvent(
   e: RoutedEvent,
   payload: unknown,
+  /** Who heard it. A webhook by default; a status check passes its own. */
+  heardBy?: EventSource,
 ): Promise<"ok" | "duplicate" | "unknown_reference" | "ignored"> {
   const tx = await findForEvent(e);
   if (!tx) return "unknown_reference";
   // Only the provider carrying the payment may move it.
   if (tx.partner_in !== e.provider && tx.partner_out !== e.provider) return "ignored";
-  const source = `${e.provider}_webhook` as EventSource;
+  const source = heardBy ?? (`${e.provider}_webhook` as EventSource);
   const logged = await logEvent({
     transactionId: tx.id,
     source,
@@ -717,6 +719,84 @@ export async function handleRoutedEvent(
     { source, payload },
   );
   return "ok";
+}
+
+/* ------------------------------ status checks ----------------------------- */
+
+/**
+ * Asks the provider what happened, for when its webhook never reached us. The
+ * answer goes down the same path as a webhook, so hearing it twice is harmless.
+ * Returns the payment as it now stands.
+ */
+export async function checkRoutedStatus(tx: Tx, source: EventSource): Promise<Tx> {
+  if (!isRouted(tx)) return tx;
+  const stage =
+    tx.status === "awaiting_payin" ? "payin" : tx.status === "paying_out" ? "payout" : null;
+  if (!stage) return tx;
+  const provider = (stage === "payin" ? tx.partner_in : tx.partner_out) as ProviderId | null;
+  const ask = provider ? ADAPTERS[provider]?.status : undefined;
+  const reference = stage === "payin" ? tx.reference : tx.payout_reference;
+  if (!provider || !ask || !reference) return tx;
+  const rail = stage === "payin" ? tx.pay_method : ((await payoutRecipient(tx))?.rail ?? "momo");
+  try {
+    const answer = await ask({ stage, reference, rail, transactionId: tx.id });
+    if (!answer) return tx;
+    await handleRoutedEvent(answer.event, { statusQuery: answer.raw }, source);
+  } catch (e) {
+    // A failed check changes nothing; the webhook or the next check will do.
+    console.error(`[routed] status check failed for ${tx.reference}`, e);
+    return tx;
+  }
+  return (await loadTx(tx.id)) ?? tx;
+}
+
+const POLL_CHECK_AFTER_MS = 15_000;
+const POLL_CHECK_EVERY_MS = 12_000;
+// When each payment was last asked about from a page poll. In memory: it only
+// stops a page that polls every few seconds from asking the provider each time.
+const lastPollCheck = new Map<string, number>();
+
+/** For the pages that poll: asks the provider now and then, not on every poll. */
+export async function pollRoutedStatus(tx: Tx): Promise<Tx> {
+  if (!isRouted(tx) || (tx.status !== "awaiting_payin" && tx.status !== "paying_out")) return tx;
+  const now = Date.now();
+  const age = now - new Date(tx.updated_at).getTime();
+  if (age < POLL_CHECK_AFTER_MS || now - (lastPollCheck.get(tx.id) ?? 0) < POLL_CHECK_EVERY_MS)
+    return tx;
+  lastPollCheck.set(tx.id, now);
+  return checkRoutedStatus(tx, "system");
+}
+
+/**
+ * The cron's share for routed payments: start a payout that never started, and
+ * ask about payments that have waited too long for a webhook.
+ */
+export async function runRoutedChecks(): Promise<{ started: number; checked: number }> {
+  const out = { started: 0, checked: 0 };
+  const ago = (min: number) => new Date(Date.now() - min * 60_000).toISOString();
+  const routed = () =>
+    db().from("transactions").select().not("partner_in", "is", null).neq("partner_in", "payaza");
+
+  const { data: stuck } = await routed()
+    .eq("status", "collected")
+    .is("payout_reference", null)
+    .lt("updated_at", ago(2))
+    .limit(50);
+  for (const tx of stuck ?? []) {
+    await routedPayout(tx, "job");
+    out.started++;
+  }
+
+  const { data: waiting } = await routed()
+    .in("status", ["awaiting_payin", "paying_out"])
+    .lt("updated_at", ago(2))
+    .gt("created_at", ago(24 * 60))
+    .limit(50);
+  for (const tx of waiting ?? []) {
+    await checkRoutedStatus(tx, "job");
+    out.checked++;
+  }
+  return out;
 }
 
 /* ---------------------------------- admin --------------------------------- */

@@ -14,6 +14,7 @@ import {
   type Recipient,
   type YellowCardRate,
 } from "~/lib/partner-requests";
+import { kotaniStatusEvent, type RoutedEvent } from "~/lib/partner-webhooks";
 import type { Basis, ProviderId } from "~/lib/providers";
 import { estimateQuote, type RouteQuote, type RouteRequest } from "~/lib/routing";
 import { env } from "../env";
@@ -66,6 +67,17 @@ export interface Adapter {
     /** Who is paying. A mobile money prompt needs their number. */
     payer?: { name: string; phone: string | null; country: string | null; network?: string | null };
   }): Promise<PayinInstructions>;
+  /**
+   * Asks the provider what happened to a payment, for when its webhook never
+   * arrives. Null when it has no answer yet, or the adapter can't ask.
+   */
+  status?(input: {
+    stage: RoutedEvent["stage"];
+    reference: string;
+    /** For a payout, how the recipient is paid: Kotani keeps mobile money and bank apart. */
+    rail: string;
+    transactionId?: string;
+  }): Promise<{ event: RoutedEvent; raw: unknown } | null>;
 }
 
 const sandbox = () => env.mode === "sandbox";
@@ -306,6 +318,28 @@ const kotani: Adapter = {
       phone,
       simulated: false,
     };
+  },
+  async status({ stage, reference, rail, transactionId }) {
+    const k = env.kotani;
+    if (!k) return null;
+    // One status endpoint per kind of payment, from Kotani's spec.
+    const path =
+      stage === "payin"
+        ? `/deposit/mobile-money/status/${encodeURIComponent(reference)}`
+        : rail === "bank"
+          ? `/withdraw/v2/bank/status/${encodeURIComponent(reference)}`
+          : `/withdraw/status/${encodeURIComponent(reference)}`;
+    const r = await partnerFetch<{ data?: unknown }>({
+      partner: "kotani",
+      method: "GET",
+      url: `${k.baseUrl}${path}`,
+      headers: { Authorization: `Bearer ${k.apiKey}` },
+      transactionId,
+    });
+    // Not found, or Kotani down: no answer yet. The next check asks again.
+    if (!r.ok) return null;
+    const event = kotaniStatusEvent(stage, reference, r.data?.data);
+    return event ? { event, raw: r.data } : null;
   },
 };
 

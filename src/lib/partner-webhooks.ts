@@ -101,6 +101,16 @@ export function parseYellowCardWebhook(body: unknown): RoutedEvent | null {
   };
 }
 
+/**
+ * Kotani's statuses, from its spec. Most read plainly, but a reversal and an
+ * error are failures too, and REQUIRE_REVIEW or a retry still in flight is
+ * neither yet.
+ */
+function kotaniOutcome(status: string | null): RoutedEvent["outcome"] {
+  if (status && /^(REVERSED|ERROR_OCCURRED)$/i.test(status)) return "failed";
+  return outcomeOf(status);
+}
+
 export function parseKotaniWebhook(body: unknown): RoutedEvent | null {
   const b = (body ?? {}) as Record<string, unknown>;
   const event = str(b["event"]);
@@ -117,9 +127,38 @@ export function parseKotaniWebhook(body: unknown): RoutedEvent | null {
     reference,
     partnerRef: str(d["id"]) ?? str(d["transaction_id"]) ?? str(d["transactionId"]),
     stage,
-    outcome: outcomeOf(status),
+    outcome: kotaniOutcome(status),
     key: `kotani:${reference}:${event}:${status}`,
     reason: str(d["message"]) ?? str(d["error_message"]) ?? str(d["errorMessage"]),
+  };
+}
+
+/**
+ * What Kotani says when we ask about a payment ourselves, in case its webhook
+ * never reached us. The reply's data is the deposit or withdrawal record, so
+ * it reads like a webhook's data. Keyed by status: asking twice and hearing the
+ * same answer changes nothing.
+ */
+export function kotaniStatusEvent(
+  stage: RoutedEvent["stage"],
+  reference: string,
+  data: unknown,
+): RoutedEvent | null {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const status = str(d["status"]);
+  if (!status) return null;
+  return {
+    provider: "kotani",
+    reference,
+    partnerRef: str(d["id"]),
+    stage,
+    outcome: kotaniOutcome(status),
+    key: `kotani:${reference}:status:${stage}:${status}`,
+    reason:
+      str(d["errorMessage"]) ??
+      str(d["transactionError"]) ??
+      str(d["transaction_error"]) ??
+      str(d["message"]),
   };
 }
 

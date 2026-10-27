@@ -20,6 +20,7 @@ import { env } from "./env";
 import { CollectError, type PayinDetails } from "./money/collect";
 import {
   createTransfer,
+  pollRoutedStatus,
   quoteTransfer,
   simulateRoutedPayin,
   type PricedPlan,
@@ -234,10 +235,12 @@ export async function getTransfer(id: string): Promise<TransferView | null> {
     .eq("kind", "transfer")
     .maybeSingle();
   if (!tx) return null;
+  // If the provider's webhook is late, this asks the provider now and then.
+  const now = await pollRoutedStatus(tx);
   const { data: r } = tx.recipient_id
     ? await db().from("recipients").select("name").eq("id", tx.recipient_id).maybeSingle()
     : { data: null };
-  return view(tx, r?.name ?? "Recipient");
+  return view(now, r?.name ?? "Recipient");
 }
 
 export async function listTransfers(): Promise<TransferView[]> {

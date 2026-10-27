@@ -23,6 +23,7 @@ import {
 } from "./money/collect";
 import {
   isRouted,
+  pollRoutedStatus,
   quoteRequestPayment,
   simulateRoutedPayin,
   startRoutedPayment,
@@ -60,6 +61,9 @@ export async function startPayment(input: StartPaymentInput): Promise<PayResult<
 
 export async function pollAttempt(transactionId: string): Promise<AttemptView | null> {
   if (!/^[0-9a-f-]{36}$/.test(transactionId)) return null;
+  // A routed payment whose webhook is late: ask the provider now and then.
+  const tx = await loadTx(transactionId);
+  if (tx && isRouted(tx)) await pollRoutedStatus(tx);
   return attemptView(transactionId);
 }
 

@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import {
   parseKlashaWebhook,
+  kotaniStatusEvent,
   parseKotaniWebhook,
   parseYellowCardWebhook,
   verifyKotaniWebhook,
@@ -88,6 +89,51 @@ describe("Kotani webhook", () => {
         data: { reference_id: "MRD-ABCDEFGH-2", status: "FAILED" },
       }),
     ).toMatchObject({ stage: "payin", outcome: "failed" });
+  });
+
+  it("treats a reversal or an error as a failure, and a review as still waiting", () => {
+    const withdraw = (status: string) =>
+      parseKotaniWebhook({
+        event: "transaction.withdraw.status.updated",
+        data: { referenceId: "MRDT-ABCDEFGH-P", status },
+      })?.outcome;
+    expect(withdraw("REVERSED")).toBe("failed");
+    expect(withdraw("ERROR_OCCURRED")).toBe("failed");
+    expect(withdraw("TRANSACTION_RETRY_FAILED")).toBe("failed");
+    expect(withdraw("REQUIRE_REVIEW")).toBe("pending");
+    expect(withdraw("TRANSACTION_RETRY")).toBe("pending");
+  });
+});
+
+describe("Kotani status check", () => {
+  it("reads a deposit's status the way it reads the webhook", () => {
+    // The shape of GET /deposit/mobile-money/status/{reference_id} in Kotani's spec.
+    expect(
+      kotaniStatusEvent("payin", "MRD-ABCDEFGH-2", {
+        id: "dep-77",
+        reference_id: "MRD-ABCDEFGH-2",
+        status: "SUCCESSFUL",
+        amount: 1500,
+      }),
+    ).toEqual({
+      provider: "kotani",
+      reference: "MRD-ABCDEFGH-2",
+      partnerRef: "dep-77",
+      stage: "payin",
+      outcome: "success",
+      key: "kotani:MRD-ABCDEFGH-2:status:payin:SUCCESSFUL",
+      reason: null,
+    });
+  });
+
+  it("carries a failed withdrawal's reason, and ignores a reply with no status", () => {
+    expect(
+      kotaniStatusEvent("payout", "MRDT-ABCDEFGH-P", {
+        status: "FAILED",
+        errorMessage: "Recipient wallet is not registered",
+      }),
+    ).toMatchObject({ outcome: "failed", reason: "Recipient wallet is not registered" });
+    expect(kotaniStatusEvent("payout", "MRDT-ABCDEFGH-P", {})).toBeNull();
   });
 });
 

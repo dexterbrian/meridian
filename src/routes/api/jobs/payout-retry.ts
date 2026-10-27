@@ -2,6 +2,7 @@ import type { APIEvent } from "@solidjs/start/server";
 import { timingSafeEqual } from "~/lib/payaza-webhook";
 import { env } from "~/server/env";
 import { runPayoutRetry } from "~/server/money/collect";
+import { runRoutedChecks } from "~/server/money/routed";
 
 // /api/jobs/payout-retry (TRD 11). Hit by a cron every 10 minutes with
 // `Authorization: Bearer JOBS_SECRET`. Vercel Cron sends GET with
@@ -16,7 +17,8 @@ async function run(event: APIEvent) {
   }
   try {
     const result = await runPayoutRetry();
-    return new Response(JSON.stringify({ ok: true, ...result }), {
+    const routed = await runRoutedChecks();
+    return new Response(JSON.stringify({ ok: true, ...result, routed }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {

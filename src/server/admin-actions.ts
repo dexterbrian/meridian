@@ -11,7 +11,7 @@ import {
   adminRetryPayout,
   runPayoutRetry,
 } from "./money/collect";
-import { isRouted, retryRoutedPayout, routedPayout } from "./money/routed";
+import { isRouted, retryRoutedPayout, routedPayout, runRoutedChecks } from "./money/routed";
 import { supabaseAdmin } from "./supabase";
 
 // Server functions for /admin. Every one checks the admin claim first.
@@ -125,9 +125,10 @@ export async function actOnTransaction(input: {
 export async function runRetryNow(): Promise<ActionResult<{ summary: string }>> {
   await requireAdmin();
   const r = await runPayoutRetry();
+  const routed = await runRoutedChecks();
   return {
     ok: true,
-    summary: `started ${r.started}, resumed ${r.resumed}, checked ${r.checked}, reconciled ${r.reconciled}`,
+    summary: `started ${r.started}, resumed ${r.resumed}, checked ${r.checked}, reconciled ${r.reconciled}; routed: started ${routed.started}, checked ${routed.checked}`,
   };
 }
 
