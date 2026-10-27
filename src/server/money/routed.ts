@@ -153,6 +153,7 @@ async function openWithFallback(
     const { result, quote, attempts } = await executeWithFallback(plan.quotes, (q) =>
       ADAPTERS[q.provider].collect({
         quote: q,
+        amount: (q as PricedQuote).price.total,
         rail,
         reference: tx.reference,
         payoutTo,

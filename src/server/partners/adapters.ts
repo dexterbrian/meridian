@@ -57,6 +57,8 @@ export interface Adapter {
   /** Tells a payer how to pay `quote.sendAmount`. The provider then pays `payoutTo`. */
   collect(input: {
     quote: RouteQuote;
+    /** What the payer pays: the provider's price plus Meridian's fee. */
+    amount: number;
     rail: string;
     reference: string;
     payoutTo: Recipient;
@@ -275,9 +277,11 @@ const kotani: Adapter = {
       },
       input.transactionId,
     );
+    // The payer pays the whole price into Meridian's wallet. The payout takes
+    // the provider's share; Meridian's fee is what stays behind.
     const { path, body } = kotaniDepositBody({
       customerKey,
-      amount: input.quote.sendAmount,
+      amount: input.amount,
       walletId,
       referenceId: input.reference,
       callbackUrl: `${env.appUrl}/api/webhooks/kotani`,
@@ -298,7 +302,7 @@ const kotani: Adapter = {
     return {
       kind: "momo_prompt",
       currency: input.quote.sendCurrency,
-      amount: input.quote.sendAmount,
+      amount: input.amount,
       phone,
       simulated: false,
     };
