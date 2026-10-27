@@ -100,7 +100,8 @@ PAYAZA_SIMULATE_PAYOUTS           # sandbox only: true marks payouts settled wit
 # /payaza-account/api/v1/mainaccounts/merchant/enquiry/main, not configured.
 KOTANI_API_KEY
 KOTANI_WEBHOOK_SECRET
-KOTANI_BASE_URL                   # sandbox-api.kotanipay.io | api.kotanipay.io
+KOTANI_BASE_URL                   # default https://sandbox-api.kotanipay.com/api/v3; production URL to confirm with Kotani
+KOTANI_WALLETS                    # GHS:<wallet id>,KES:<wallet id> (made in Kotani's dashboard)
 KLASHA_USERNAME
 KLASHA_PASSWORD
 KLASHA_PUBLIC_KEY                 # x-auth-token
