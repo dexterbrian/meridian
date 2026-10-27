@@ -65,9 +65,11 @@ test.describe("paying a KES request in another currency", () => {
     await expect(choices).not.toContainText("USDT");
     // Euros from abroad are Yellow Card's, and it is switched off.
     await expect(choices.getByRole("option", { name: /^EUR/ })).toHaveCount(0);
-    // What Kotani collects is there: African local currencies by mobile money.
+    // What Kotani collects is there: African local currencies by mobile money,
+    // and only that. Its bank and card deposits need a checkout page we haven't built.
     await expect(choices.getByRole("option", { name: /^GHS · Mobile money/ })).toHaveCount(1);
-    await expect(choices.getByRole("option", { name: /^ZAR · Bank account/ })).toHaveCount(1);
+    await expect(choices.getByRole("option", { name: /^ZAR · Mobile money/ })).toHaveCount(1);
+    await expect(choices.getByRole("option", { name: /Bank account|Card/ })).toHaveCount(0);
     // With no dollar route open, the note says so instead of naming one.
     await expect(page.getByText("Ask the business for another way to pay.")).toBeVisible();
   });
