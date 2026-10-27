@@ -1186,6 +1186,7 @@ export async function handleTransferOutcome(input: {
  *   2. collected, has a payout reference: the call died mid-way. Ask Payaza, then retry with the same reference.
  *   3. paying_out older than 10 min: ask Payaza and settle or fail.
  * Also nudges awaiting_payin attempts older than 2 min with a status query.
+ * Payaza payments only: routed ones are checked by runRoutedChecks in routed.ts.
  */
 export async function runPayoutRetry(): Promise<{
   started: number;
@@ -1197,9 +1198,12 @@ export async function runPayoutRetry(): Promise<{
   const twoMinAgo = new Date(Date.now() - 2 * 60_000).toISOString();
   const tenMinAgo = new Date(Date.now() - 10 * 60_000).toISOString();
 
-  const { data: collected } = await db()
-    .from("transactions")
-    .select()
+  // Only Payaza's own payments. A routed payment asked about here would be paid
+  // out through Payaza, which never held its money.
+  const payazaOnly = () =>
+    db().from("transactions").select().or("partner_in.is.null,partner_in.eq.payaza");
+
+  const { data: collected } = await payazaOnly()
     .eq("status", "collected")
     .lt("updated_at", twoMinAgo)
     .limit(50);
@@ -1227,9 +1231,7 @@ export async function runPayoutRetry(): Promise<{
     }
   }
 
-  const { data: paying } = await db()
-    .from("transactions")
-    .select()
+  const { data: paying } = await payazaOnly()
     .eq("status", "paying_out")
     .lt("updated_at", tenMinAgo)
     .limit(50);
@@ -1250,9 +1252,7 @@ export async function runPayoutRetry(): Promise<{
     }
   }
 
-  const { data: waiting } = await db()
-    .from("transactions")
-    .select()
+  const { data: waiting } = await payazaOnly()
     .eq("status", "awaiting_payin")
     .lt("created_at", twoMinAgo)
     .gt("created_at", new Date(Date.now() - 24 * 3600_000).toISOString())
