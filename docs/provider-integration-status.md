@@ -3,95 +3,93 @@
 | Field | Value |
 |---|---|
 | Branch | `feat/multi-partner-routing` |
-| Last tested | 23 October 2026 |
+| Last tested | 30 October 2026 |
 | How to re-run | `npm run partners:check` (asks each switched-on provider for a live price; nothing pays) |
 
 Meridian asks every provider that can carry a payment for a price, uses the
 cheapest and keeps the rest as backups. This file records what has actually been
 run against each provider, as opposed to built from their documentation.
 
-## Kotani Pay is the only provider
+## Where things stand, 30 October 2026
 
 One list decides which providers may carry money: `ENABLED_PROVIDERS` in
 `src/lib/providers.ts`. Today it holds Kotani Pay alone.
 
-**Ordinary money in, ordinary money out.** Meridian never shows a payer or a
-recipient a stablecoin. A provider may settle in stablecoins behind the scenes,
-which is how Kotani works, but nobody is asked to send or receive crypto. No
-provider's onramp or offramp endpoints are used, and that rule holds for the
-providers still to be switched on.
-
-**Two providers were dropped, 23 October 2026.**
-
-- **Minisend.** It is a crypto payment provider: its only product takes USDC and
-  pays out local money. With no crypto in the product there is nothing for it to
-  do. Its code, adapter, webhook route and keys are gone.
-- **Payaza.** It did not meet the requirement, starting with paying out US
-  dollars. It is out of the provider list, out of the router, and no longer
-  offered on the pay page. Its older collection code is still in the tree, but
-  no payment reaches it any more.
-
-**Yellow Card and Klasha are built and switched off**, waiting on their business
-checks and sandbox keys. To turn one back on, add its id to that list. Nothing
-else changes: the adapter, the webhook route, the prices and the tests are
-already there.
-
-Switching a provider off is not just a routing rule. A payer is never shown a
-currency it would have collected, and a business cannot choose a country it
-would have paid, so nobody is offered a payment we cannot actually carry. With
-Kotani alone that means no euros or dollars from abroad, and no payouts to China
-or Japan.
-
-| Provider | Switched on | Keys | Reached live | Prices live | Blocking it |
+| Provider | Switched on | Keys | Prices live | What it carries | Blocking it |
 |---|---|---|---|---|---|
-| Kotani Pay | yes | sandbox, 11 October 2026 | Yes, until the hold below | No | No exchange rate is set up for any pair |
-| Yellow Card | no | none | — | — | Business checks, then sandbox keys |
-| Klasha | no | none | — | — | Business checks, then sandbox credentials |
+| Kotani Pay | yes | sandbox | Yes, onramp and offramp rates | African mobile money in; mobile money and Kenyan or South African banks out | Nothing for pricing. The first real payment is still to run |
+| Klasha | no | sandbox keys saved, no login yet | No | Asia: China by its CNY payout, Japan, India, Hong Kong and others by Klasha Wire | Its API token needs the dashboard email and password; and a way to fund it (below) |
+| Passpoint | no | none | No (no quote call; estimates) | Banks abroad: USD (US), EUR (SEPA), GBP (UK) | API key; and a way to fund it (below) |
+| Yellow Card | no | none | — | Built, unchanged | Business checks, then sandbox keys |
 
----
+**Ordinary money in, ordinary money out.** A payer always pays in their own
+currency and a recipient is always paid in theirs. Kotani carries the money
+between the two as USDC in a wallet of ours, which nobody using Meridian sees.
+
+**Payaza is gone.** Its client, webhook, card checkout, OTP step and sandbox
+script are deleted. The two jobs it still did now run elsewhere: a business's
+payout account is checked through Kotani's account validation, and the
+countries a business can sign up from come from the switched-on providers.
+
+### Klasha and Passpoint can pay out, but cannot take money in
+
+Both pay a recipient from a balance Meridian holds with them. Neither has a
+collection endpoint we have built, and the router only picks a provider that can
+do both ends. So until one of these is decided, neither carries a payment on its
+own, and both stay switched off:
+
+1. Meridian keeps a float with Klasha and Passpoint, topped up by hand, and the
+   payer pays in through Kotani. This needs the router to allow one provider in
+   and another out.
+2. Build Klasha's own collections (M-Pesa, bank, card) and its swap API, so a
+   Kenyan business pays Klasha in shillings and Klasha pays the supplier in yuan.
+
+### Klasha, 30 October 2026
+
+- Sandbox keys read from its dashboard into `.env.local`: public key, private key,
+  the 24-character encryption key and the business id.
+- Its current encryption is 3DES (key: the first 24 characters, IV: the first 8).
+  Ours was the older AES scheme; it is now 3DES and matches OpenSSL byte for byte.
+- Every Klasha call also needs a token from `/auth/account/v2/login` with the
+  dashboard email and password. Add `KLASHA_USERNAME` and `KLASHA_PASSWORD` to
+  `.env.local` yourself.
+- China uses its CNY payout: a B2B quotation, then a transfer to a company bank
+  account. The supplier form now asks for the company's registered Chinese name,
+  its 18-character unified social credit code, a +86 mobile, city, province and
+  postcode. Klasha's Alipay and WeChat payouts are person to person, so they are
+  not offered. The docs' B2B examples attach invoices; we send the order without
+  attachments, which Klasha may refuse. To confirm.
+
+### Passpoint, 30 October 2026
+
+Built from docs.dev.mypasspoint.com: a token from `merchant-app/get-auth-token`
+(merchant id and API key), the cross-border transfer, and its status check. Its
+webhooks are signed with HMAC-SHA512 but the docs don't say how, so we check the
+status instead. It only answers whitelisted IPs. Needs `PASSPOINT_MERCHANT_ID`,
+`PASSPOINT_API_KEY` and `PASSPOINT_USER_APP_CONTEXT` (given at onboarding).
 
 ## 1. Kotani Pay
 
-### Where it stands, 23 October 2026
+### How a payment runs now
 
-Kotani switched services on for the account. Three of the five we need now
-answer; two are still off, and no exchange rate is configured, so Kotani still
-cannot price a payment.
+Kotani's fiat invoice endpoint is deprecated, so a payment is three calls:
 
-| Request | 13 October | 23 October |
-|---|---|---|
-| Ask for a rate, Ghana cedis to Kenyan shillings | Refused: rates not enabled | Reaches the service. Answers "Rate Not Supported" |
-| Take money in by mobile money | Refused: deposit not enabled | Works as far as we can test: it asks for a wallet and a customer |
-| Pay out by mobile money, and by bank | Refused: withdraw not enabled | Same: it asks for the account details |
-| Their crypto endpoints (onramp, offramp) | Refused: not enabled | Still refused. We don't use them |
+1. **Wallet.** Each business gets a crypto wallet at Kotani, made the first time
+   it is needed and found by name after that.
+2. **Onramp.** Kotani prompts the payer's phone. Their cedis buy USDC, which
+   lands in that wallet. If we don't know the payer's network, Kotani's phone
+   check reads it from the number.
+3. **Offramp.** When the USDC has landed, Kotani sells it and pays the recipient
+   directly, by mobile money or bank. No separate payout call is needed.
 
-Two separate things come back when we ask for a rate. Dollars, euros and naira
-are rejected outright as currencies Kotani does not handle. Every pair of its
-own African currencies is accepted but has no rate set up. So the service is on
-and the account is allowed to use it, but there is nothing in it to quote from.
+The price is the two rates joined. On 30 October 2026 paying KES 129,000 needed
+1,020.37 USDC (Kotani's KES 82 fee included), and that USDC cost about
+GH₵12,240. Meridian's 1% is charged on top; it is the USDC left in the wallet.
 
-### A hold on our network
+### Earlier history
 
-After about forty calls in a few minutes, mapping which pairs and which
-endpoints work, Kotani put a temporary block on us. Every request now comes back
-"Access from this device or network is temporarily restricted as a security
-precaution", including the country list that worked all morning. It is tied to
-the network, not the key. **Kotani need to lift it, quoting request id
-`1f4f8be6-ea17-4cb3-9c2b-525473c7ae71`.** `npm run partners:check` now reports
-this as a hold rather than a failure, so it is obvious when it is lifted.
-
-### What to ask Kotani
-
-1. Lift the access hold, quoting the request id above.
-2. Set up exchange rates for the pairs we need, starting with Ghana cedis to
-   Kenyan shillings and Kenyan shillings to Ghana cedis. Or tell us which pairs
-   the sandbox is meant to price.
-3. Give us the wallet ids. Taking a payment in and paying one out both name a
-   wallet of ours in that currency, and both also want a saved customer. Tell us
-   whether the account already has a wallet per currency, and confirm the
-   customer endpoint. We set the ids as KOTANI_WALLETS="KES:...,GHS:...".
-4. Nothing else. `onramp`, `offramp` and `offramp_mobile_money` are their crypto
-   endpoints and Meridian does not use them. They can stay off.
+The sections below record the fiat flow tried in October, before the switch to
+onramp and offramp. The access hold has since been lifted.
 
 ### Three things the live test corrected in our code
 
