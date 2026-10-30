@@ -36,8 +36,6 @@ describe("providersFor: which providers can carry a payment", () => {
       { currency: "KES", rail: "momo", country: "KE" },
     );
     expect(ids(m)).toEqual(expect.arrayContaining(["kotani", "yellowcard"]));
-    // Payaza can't convert, so it never carries a cross-currency payment.
-    expect(ids(m)).not.toContain("payaza");
   });
 
   it("same currency in Kenya: Kotani and Yellow Card can both carry it", () => {
@@ -80,9 +78,8 @@ describe("providersFor: which providers can carry a payment", () => {
     expect(ids(covering(kes, { currency: "CNY", rail: "bank", country: "CN" }))).toEqual([
       "klasha",
     ]);
-    expect(ids(covering(kes, { currency: "CNY", rail: "wallet", country: "CN" }))).toEqual([
-      "klasha",
-    ]);
+    // Klasha's Alipay and WeChat payouts are person to person, so not offered.
+    expect(ids(covering(kes, { currency: "CNY", rail: "wallet", country: "CN" }))).toEqual([]);
     expect(ids(covering(kes, { currency: "JPY", rail: "bank", country: "JP" }))).toEqual([
       "klasha",
     ]);

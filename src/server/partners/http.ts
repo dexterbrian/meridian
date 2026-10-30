@@ -4,7 +4,7 @@ import { redact } from "~/lib/redact";
 import { supabaseAdmin } from "../supabase";
 
 // One logged HTTP call to a routed provider (Kotani, Yellow Card, Klasha). Same
-// shape as payazaCall: every call lands in partner_calls with secrets stripped,
+// same shape for every provider: every call lands in partner_calls with secrets stripped,
 // whatever happened.
 
 export type PartnerResult<T> = { ok: boolean; status: number; data: T | null; text: string | null };

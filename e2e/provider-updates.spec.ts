@@ -37,7 +37,7 @@ async function payWith(page: Page, label: string) {
 }
 
 test.describe("provider webhooks", () => {
-  test("a signed Kotani deposit settles the payment; a forged one is refused", async ({ page }) => {
+  test("a signed Kotani onramp settles the payment; a forged one is refused", async ({ page }) => {
     await page.goto(`/pay/${data().requests[2]}`);
     await payWith(page, "GHS · Mobile money (Ghana)");
     await expect(page.getByTestId("route-quote").first()).toHaveAttribute(
@@ -58,13 +58,14 @@ test.describe("provider webhooks", () => {
       .first()
       .textContent())!.trim();
 
-    // The payer's money reaching Kotani is a deposit. Kotani then pays the
+    // The payer's money reaching our Kotani wallet is the onramp. Kotani then pays the
     // business out, which in a test run with no keys is simulated.
     const body = {
-      event: "transaction.deposit.status.updated",
+      event: "transaction.onramp.status.updated",
       data: {
-        reference_id: reference,
-        status: "SUCCESSFUL",
+        referenceId: reference,
+        depositStatus: "SUCCESSFUL",
+        onchainStatus: "SUCCESSFUL",
         id: `kot-${Date.now()}`,
       },
     };

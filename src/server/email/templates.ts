@@ -168,7 +168,7 @@ export function demoEmail(p: Omit<Layout, "demo">): Email {
 }
 
 /* ------------------------------- collections ------------------------------ */
-// Receipts and notices for the Payaza collection flow. Every one shows the
+// Receipts and notices for payments to a business. Every one shows the
 // business's invoice number (when given) and the Meridian reference.
 
 export type CollectionFacts = {
@@ -198,7 +198,7 @@ function refRows(f: CollectionFacts): Row[] {
 }
 
 const sandboxNote = (on: boolean) =>
-  on ? "Sandbox payment through Payaza's test environment. No real money moved." : undefined;
+  on ? "Sandbox payment through a provider's test environment. No real money moved." : undefined;
 
 export function payerReceipt(f: CollectionFacts): Email {
   const inv = f.invoiceNumber ? ` · ${f.invoiceNumber}` : "";
@@ -216,9 +216,7 @@ export function payerReceipt(f: CollectionFacts): Email {
       { label: "You paid", value: f.totalCharged },
       { label: "Date", value: f.settledAt },
     ],
-    footnote:
-      sandboxNote(f.sandbox) ??
-      "Keep this email as your receipt. Payments are processed by Payaza.",
+    footnote: sandboxNote(f.sandbox) ?? "Keep this email as your receipt.",
   });
 }
 
@@ -298,7 +296,7 @@ export function transactionFailedEmail(p: {
   const payout = p.stage === "payout";
   const intro = payout
     ? p.forAdmin
-      ? `Payaza could not pay ${p.amount} to ${p.businessName}. The money is in Meridian's Payaza balance. Retry the payout or arrange a refund in the admin.`
+      ? `The provider could not pay ${p.amount} to ${p.businessName}. The money is still with the provider. Retry the payout or arrange a refund in the admin.`
       : `We received ${p.amount} for ${p.reference} but could not pay it to your account yet. We are on it and will email you when it is done.`
     : `The payment for ${p.reference} did not complete. No money moved.`;
   return render({

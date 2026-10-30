@@ -3,15 +3,8 @@
 import type { Tables } from "~/lib/database.types";
 import { adminFlagActionSchema, adminTransactionActionSchema } from "~/lib/schemas";
 import { currentViewer } from "./auth";
-import {
-  CollectError,
-  adminMarkRefunded,
-  adminReject,
-  adminRelease,
-  adminRetryPayout,
-  runPayoutRetry,
-} from "./money/collect";
-import { isRouted, retryRoutedPayout, routedPayout, runRoutedChecks } from "./money/routed";
+import { CollectError, adminMarkRefunded, adminReject, adminRelease } from "./money/collect";
+import { retryRoutedPayout, routedPayout, runRoutedChecks } from "./money/routed";
 import { supabaseAdmin } from "./supabase";
 
 // Server functions for /admin. Every one checks the admin claim first.
@@ -100,14 +93,13 @@ export async function actOnTransaction(input: {
   try {
     switch (parsed.data.action) {
       case "release":
-        await adminRelease(tx, admin.id, parsed.data.note, isRouted(tx) ? routedPayout : undefined);
+        await adminRelease(tx, admin.id, parsed.data.note, routedPayout);
         break;
       case "reject":
         await adminReject(tx, admin.id, parsed.data.note);
         break;
       case "retry_payout":
-        if (isRouted(tx)) await retryRoutedPayout(tx, admin.id);
-        else await adminRetryPayout(tx, admin.id);
+        await retryRoutedPayout(tx, admin.id);
         break;
       case "mark_refunded":
         await adminMarkRefunded(tx, admin.id, parsed.data.note);
@@ -124,12 +116,8 @@ export async function actOnTransaction(input: {
 /** Runs the payout retry sweep now, without waiting for the cron. */
 export async function runRetryNow(): Promise<ActionResult<{ summary: string }>> {
   await requireAdmin();
-  const r = await runPayoutRetry();
-  const routed = await runRoutedChecks();
-  return {
-    ok: true,
-    summary: `started ${r.started}, resumed ${r.resumed}, checked ${r.checked}, reconciled ${r.reconciled}; routed: started ${routed.started}, checked ${routed.checked}`,
-  };
+  const r = await runRoutedChecks();
+  return { ok: true, summary: `started ${r.started}, checked ${r.checked}` };
 }
 
 export async function getAdminTransaction(id: string): Promise<{

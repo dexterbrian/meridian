@@ -1,25 +1,15 @@
 "use server";
 
 import { payerOptions, type PayerOption, type Rail } from "~/lib/providers";
-import {
-  routedPaySchema,
-  startPaymentSchema,
-  xofOtpSchema,
-  type RoutedPayInput,
-  type StartPaymentInput,
-} from "~/lib/schemas";
+import { routedPaySchema, type RoutedPayInput } from "~/lib/schemas";
 import {
   CollectError,
   attemptView,
   loadPublicRequest,
-  simulatePayerApproval,
-  startAttempt,
   loadTx,
   pickPayoutAccount,
-  submitXofOtp,
   type AttemptView,
   type PublicRequest,
-  type StartResult,
 } from "./money/collect";
 import {
   isRouted,
@@ -29,7 +19,7 @@ import {
   startRoutedPayment,
   type PricedPlan,
 } from "./money/routed";
-import { RATE_LIMITED, allowRequest, requestOrigin } from "./request";
+import { RATE_LIMITED, allowRequest } from "./request";
 import { supabaseAdmin } from "./supabase";
 
 // Server functions behind the public pay page. No session: the payer has no
@@ -43,22 +33,6 @@ export async function getPublicRequest(reference: string): Promise<PublicRequest
   return loadPublicRequest(reference);
 }
 
-export async function startPayment(input: StartPaymentInput): Promise<PayResult<StartResult>> {
-  const parsed = startPaymentSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check the form." };
-  }
-  if (!allowRequest("pay")) return { ok: false, error: RATE_LIMITED };
-  try {
-    const result = await startAttempt({ ...parsed.data, origin: requestOrigin() });
-    return { ok: true, ...result };
-  } catch (e) {
-    if (e instanceof CollectError) return { ok: false, error: e.message, code: e.code };
-    console.error("[pay] startPayment failed", e);
-    return { ok: false, error: "We could not start this payment. Please try again." };
-  }
-}
-
 export async function pollAttempt(transactionId: string): Promise<AttemptView | null> {
   if (!/^[0-9a-f-]{36}$/.test(transactionId)) return null;
   // A routed payment whose webhook is late: ask the provider now and then.
@@ -67,31 +41,12 @@ export async function pollAttempt(transactionId: string): Promise<AttemptView | 
   return attemptView(transactionId);
 }
 
-export async function submitOtp(input: {
-  transaction_id: string;
-  otp: string;
-}): Promise<PayResult> {
-  const parsed = xofOtpSchema.safeParse(input);
-  if (!parsed.success)
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter the code." };
-  if (!allowRequest("pay")) return { ok: false, error: RATE_LIMITED };
-  try {
-    await submitXofOtp(parsed.data.transaction_id, parsed.data.otp);
-    return { ok: true };
-  } catch (e) {
-    if (e instanceof CollectError) return { ok: false, error: e.message, code: e.code };
-    return { ok: false, error: "That code was not accepted." };
-  }
-}
-
 /** Sandbox only. Plays the payer approving on their phone. */
 export async function sandboxApprove(transactionId: string): Promise<PayResult> {
   if (!/^[0-9a-f-]{36}$/.test(transactionId)) return { ok: false, error: "Unknown payment." };
   if (!allowRequest("pay")) return { ok: false, error: RATE_LIMITED };
   try {
-    const tx = await loadTx(transactionId);
-    if (tx && isRouted(tx)) await simulateRoutedPayin(transactionId);
-    else await simulatePayerApproval(transactionId);
+    await simulateRoutedPayin(transactionId);
     return { ok: true };
   } catch (e) {
     if (e instanceof CollectError) return { ok: false, error: e.message, code: e.code };

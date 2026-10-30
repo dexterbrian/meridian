@@ -3,30 +3,9 @@ import {
   LARGE_AMOUNT_USD,
   checksBeforeCharge,
   checksBeforeTransfer,
-  checksOnCollected,
-  VIRTUAL_ACCOUNT_GRACE_MINUTES,
   namesMatch,
   strongestAction,
-  virtualAccountLapsed,
 } from "./checks";
-
-describe("virtualAccountLapsed", () => {
-  const expires = "2026-09-29T10:00:00.000Z";
-  const at = (min: number) => Date.parse(expires) + min * 60_000;
-
-  it("is open until the grace period after expiry has passed", () => {
-    expect(virtualAccountLapsed(expires, at(-10))).toBe(false);
-    expect(virtualAccountLapsed(expires, at(VIRTUAL_ACCOUNT_GRACE_MINUTES))).toBe(false);
-    expect(virtualAccountLapsed(expires, at(VIRTUAL_ACCOUNT_GRACE_MINUTES + 1))).toBe(true);
-  });
-
-  it("never lapses without a usable expiry", () => {
-    expect(virtualAccountLapsed(null, at(999))).toBe(false);
-    expect(virtualAccountLapsed("not a date", at(999))).toBe(false);
-  });
-});
-
-const openRequest = { status: "active", usage: "single", paidCount: 0 };
 
 describe("checksBeforeCharge", () => {
   it("blocks a payer in a FATF blacklisted country", () => {
@@ -50,81 +29,6 @@ describe("checksBeforeCharge", () => {
     const hits = checksBeforeCharge({ payerCountry: "IR", usdEquivalent: 50_000 });
     expect(hits).toHaveLength(2);
     expect(strongestAction(hits)).toBe("block");
-  });
-});
-
-describe("checksOnCollected", () => {
-  const base = {
-    expectedTotal: 10309.28,
-    amountReceived: 10309.28,
-    currency: "KES",
-    reportedCurrency: "KES",
-    request: openRequest,
-    expectedPartnerFee: 206.19,
-    reportedPartnerFee: 206.19,
-  };
-
-  it("passes an exact payment against an open request", () => {
-    expect(checksOnCollected(base)).toEqual([]);
-  });
-
-  it("holds when the amount received is wrong", () => {
-    const hits = checksOnCollected({ ...base, amountReceived: 10000 });
-    expect(hits.map((h) => h.rule)).toEqual(["H_AMOUNT_MISMATCH"]);
-    expect(strongestAction(hits)).toBe("hold");
-  });
-
-  it("ignores sub-cent noise", () => {
-    expect(checksOnCollected({ ...base, amountReceived: 10309.284 })).toEqual([]);
-  });
-
-  it("holds when the request was already paid (single use)", () => {
-    const hits = checksOnCollected({
-      ...base,
-      request: { status: "paid", usage: "single", paidCount: 1 },
-    });
-    expect(hits.map((h) => h.rule)).toEqual(["H_REQUEST_NOT_OPEN"]);
-    expect(strongestAction(hits)).toBe("hold");
-  });
-
-  it("allows a second payment on a multi-use request", () => {
-    expect(
-      checksOnCollected({ ...base, request: { status: "active", usage: "multi", paidCount: 5 } }),
-    ).toEqual([]);
-  });
-
-  it("holds when the request was disabled", () => {
-    const hits = checksOnCollected({ ...base, request: { ...openRequest, status: "disabled" } });
-    expect(strongestAction(hits)).toBe("hold");
-  });
-
-  it("flags a fee gap over one cent without holding", () => {
-    const hits = checksOnCollected({ ...base, reportedPartnerFee: 250 });
-    expect(hits.map((h) => h.rule)).toEqual(["H_FEE_MISMATCH"]);
-    expect(strongestAction(hits)).toBe("none");
-    expect(checksOnCollected({ ...base, reportedPartnerFee: 206.2 })).toEqual([]);
-  });
-
-  it("ignores a zero fee in sandbox, where Payaza charges nothing", () => {
-    expect(checksOnCollected({ ...base, reportedPartnerFee: 0, sandbox: true })).toEqual([]);
-    // A real gap still shows in sandbox, and a zero fee still shows in live.
-    expect(
-      checksOnCollected({ ...base, reportedPartnerFee: 250, sandbox: true }).map((h) => h.rule),
-    ).toEqual(["H_FEE_MISMATCH"]);
-    expect(
-      checksOnCollected({ ...base, reportedPartnerFee: 0, sandbox: false }).map((h) => h.rule),
-    ).toEqual(["H_FEE_MISMATCH"]);
-  });
-
-  it("holds on a currency mismatch", () => {
-    const hits = checksOnCollected({ ...base, reportedCurrency: "USD" });
-    expect(hits.map((h) => h.rule)).toEqual(["H_CURRENCY_MISMATCH"]);
-  });
-
-  it("copes with a webhook that omits the amount", () => {
-    expect(checksOnCollected({ ...base, amountReceived: null, reportedPartnerFee: null })).toEqual(
-      [],
-    );
   });
 });
 

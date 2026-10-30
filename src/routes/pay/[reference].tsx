@@ -14,7 +14,6 @@ import { Match, Show, Suspense, Switch, createEffect, createSignal, onCleanup } 
 
 import { FeeBreakdown, FeeSummary, WhyFeesCard } from "~/components/fee-breakdown";
 import { OtherCurrencyPay } from "~/components/other-currency-pay";
-import { CheckoutLauncher, MomoWait, VirtualAccountBox } from "~/components/pay-flow";
 import { INPUT_CLASS, PayMethodPicker, payButtonLabel } from "~/components/pay-methods";
 import { FallbackNote, RoutedPayinBox } from "~/components/routing";
 import { DemoBanner } from "~/components/site/banner";
@@ -28,11 +27,11 @@ import { provider as providerProfile, type ProviderId } from "~/lib/providers";
 import { isTerminal } from "~/lib/status";
 import type { AttemptView } from "~/server/money/collect";
 import type { PayinInstructions } from "~/server/partners/adapters";
-import { getPublicRequest, pollAttempt, sandboxApprove, submitOtp } from "~/server/pay-actions";
+import { getPublicRequest, pollAttempt, sandboxApprove } from "~/server/pay-actions";
 import { getDemoPaymentLink, payDemoPaymentLink } from "~/server/public-actions";
 
 // The hosted pay page. A real payment request (payment_requests) is paid through
-// Payaza. A reference that only exists in demo_transactions falls back to the
+// the provider the router picks. A reference that only exists in demo_transactions falls back to the
 // simulated demo, so the landing page demos keep working.
 
 const loadRequest = query((reference: string) => getPublicRequest(reference), "public-request");
@@ -79,7 +78,7 @@ function PageShell(props: {
       </Show>
       <Show when={props.sandbox}>
         <DemoBanner>
-          Sandbox. This payment runs through Payaza's test environment. No real money moves.
+          Sandbox. This payment runs through a provider's test environment. No real money moves.
         </DemoBanner>
       </Show>
       <DemoHeader />
@@ -134,15 +133,6 @@ function RealPay(props: { request: PublicRequest }) {
     setSearch({ attempt: id ?? undefined }, { replace: true });
   }
 
-  async function onOtp(otp: string) {
-    const id = attemptId();
-    if (!id) return;
-    const r = await submitOtp({ transaction_id: id, otp });
-    if (!r.ok) return toast.error(r.error);
-    toast.success("Code sent. Confirm on your phone.");
-    await revalidate(loadAttempt.keyFor(id));
-  }
-
   async function approveInSandbox() {
     const id = attemptId();
     if (!id) return;
@@ -179,7 +169,6 @@ function RealPay(props: { request: PublicRequest }) {
             <AttemptPanel
               attempt={attempt()!}
               request={props.request}
-              onOtp={onOtp}
               onApprove={approveInSandbox}
               onAgain={tryAgain}
               busy={busy()}
@@ -257,7 +246,6 @@ function RealPay(props: { request: PublicRequest }) {
 function AttemptPanel(props: {
   attempt: AttemptView;
   request: PublicRequest;
-  onOtp: (otp: string) => Promise<void>;
   onApprove: () => Promise<void>;
   onAgain: () => void;
   busy: boolean;
@@ -300,25 +288,6 @@ function AttemptPanel(props: {
         }))}
       />
       <Switch>
-        <Match when={a().status === "awaiting_payin" && a().payin?.kind === "momo"}>
-          <MomoWait
-            payin={a().payin as Extract<AttemptView["payin"], { kind: "momo" }>}
-            total={total()}
-            onOtp={props.onOtp}
-          />
-        </Match>
-        <Match when={a().status === "awaiting_payin" && a().payin?.kind === "virtual_account"}>
-          <VirtualAccountBox
-            payin={a().payin as Extract<AttemptView["payin"], { kind: "virtual_account" }>}
-            total={total()}
-          />
-        </Match>
-        <Match when={a().status === "awaiting_payin" && a().payin?.kind === "checkout"}>
-          <CheckoutLauncher
-            payin={a().payin as Extract<AttemptView["payin"], { kind: "checkout" }>}
-            onHint={() => void revalidate(loadAttempt.keyFor(a().id))}
-          />
-        </Match>
         <Match when={a().status === "awaiting_payin" && routedPayin()}>
           <RoutedPayinBox
             payin={a().payin as PayinInstructions}
@@ -329,11 +298,7 @@ function AttemptPanel(props: {
         <Match when={a().status === "collected" || a().status === "paying_out"}>
           <Notice tone="info">
             Payment received. {props.request.businessName} is being paid the full {amount()} now.
-            <Show when={a().payoutSimulated}>
-              {" "}
-              (Sandbox: the payout is simulated because Payaza's test merchant holds no payout
-              float.)
-            </Show>
+            <Show when={a().payoutSimulated}> (Sandbox: the payout is simulated.)</Show>
           </Notice>
         </Match>
         <Match when={a().status === "held"}>
@@ -378,7 +343,7 @@ function AttemptPanel(props: {
         </Match>
       </Switch>
 
-      <Show when={a().sandbox && a().status === "awaiting_payin" && a().payin?.kind !== "checkout"}>
+      <Show when={a().sandbox && a().status === "awaiting_payin"}>
         <div class="rounded-xl border border-dashed border-accent/60 p-4 text-center text-sm">
           <p class="text-muted-foreground">
             {routedPayin()
@@ -399,11 +364,6 @@ function AttemptPanel(props: {
           </button>
         </div>
       </Show>
-      <Show when={a().sandbox && a().status === "awaiting_payin" && a().payin?.kind === "checkout"}>
-        <p class="text-center text-xs text-muted-foreground">
-          Sandbox: use one of Payaza's test cards in the checkout.
-        </p>
-      </Show>
 
       <Show when={a().status === "awaiting_payin"}>
         <p class="text-center text-xs text-muted-foreground">
@@ -418,8 +378,8 @@ function AttemptPanel(props: {
         </p>
       </Show>
       <p class="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        <ShieldCheck class="h-3.5 w-3.5" /> Processed by {providerName() ?? "Payaza"}. Confirmed by
-        Meridian before anything moves.
+        <ShieldCheck class="h-3.5 w-3.5" /> Processed by {providerName() ?? "our payment provider"}.
+        Confirmed by Meridian before anything moves.
       </p>
     </div>
   );

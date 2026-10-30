@@ -14,7 +14,7 @@ import {
 } from "~/components/ui/field";
 import { toast } from "~/components/ui/toast";
 import { PAYOUT_CURRENCIES, currency as currencyInfo, type Currency } from "~/lib/fees";
-import { COUNTRY_NAMES, networksFor, payoutMethodsFor } from "~/lib/payaza-codes";
+import { COUNTRY_NAMES, networksFor, payoutMethodsFor } from "~/lib/countries";
 import { payoutAccountSchema } from "~/lib/schemas";
 import {
   getMyBusiness,
@@ -138,9 +138,9 @@ export default function PayoutAccounts() {
       <Title>Payout accounts — Meridian</Title>
       <h1 class="font-display text-3xl font-bold">Payout accounts</h1>
       <p class="mt-2 text-sm text-muted-foreground">
-        Where Meridian pays you. Add as many as you like, in any currency Payaza pays out in. In
-        each currency, payouts go to the account marked default. The name on every account is
-        checked and must match your business.
+        Where Meridian pays you. Add as many as you like, in any currency we can pay out in. In each
+        currency, payouts go to the account marked default. The name on every account is checked and
+        must match your business.
       </p>
 
       <Suspense fallback={<p class="mt-8 text-sm text-muted-foreground">Loading…</p>}>
@@ -186,12 +186,12 @@ export default function PayoutAccounts() {
                       </p>
                     </div>
                     <div class="flex flex-wrap items-center gap-2">
-                      {/* Payaza's sandbox names every account "Chibunkem Ojiaku", so a
-                          mismatch there says nothing about the account. Live mode checks for real. */}
+                      {/* A sandbox account check may return a test name, so a mismatch there
+                          says nothing about the account. Live mode checks for real. */}
                       <span
                         title={
                           !a.validated && sandbox()
-                            ? `Payaza's test mode returns the same test name (${a.validated_name ?? "none"}) for every account, so the name can't be checked until live mode.`
+                            ? `Test mode may return a test name (${a.validated_name ?? "none"}), so the name can't be checked until live mode.`
                             : undefined
                         }
                         class={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${
@@ -309,7 +309,7 @@ export default function PayoutAccounts() {
                   <Field
                     label="Bank code"
                     for="bank_code"
-                    hint="Payaza's code for the bank."
+                    hint="Your bank's code, as your bank publishes it."
                     error={errors()["bank_code"]}
                   >
                     <input
@@ -337,14 +337,7 @@ export default function PayoutAccounts() {
                   class={SELECT_CLASS}
                   value={editing()?.method === "momo" ? (details().bank_code ?? "") : undefined}
                 >
-                  <For each={networks()}>
-                    {(n) => (
-                      <option value={n.code}>
-                        {n.name}
-                        {n.confirmed ? "" : " (code to confirm with Payaza)"}
-                      </option>
-                    )}
-                  </For>
+                  <For each={networks()}>{(n) => <option value={n.code}>{n.name}</option>}</For>
                 </select>
               </Field>
             </Show>
@@ -386,17 +379,17 @@ export default function PayoutAccounts() {
                 <Notice tone={c().matches ? "success" : c().enforced ? "danger" : "warning"}>
                   <Show
                     when={c().resolvedName}
-                    fallback={<>Payaza did not return a name for this account.</>}
+                    fallback={<>The account check did not return a name for this account.</>}
                   >
-                    Payaza says this account belongs to <strong>{c().resolvedName}</strong>.{" "}
+                    This account belongs to <strong>{c().resolvedName}</strong>.{" "}
                     {c().matches
                       ? "That matches your business."
                       : "That does not match your business name."}
                   </Show>
                   <Show when={!c().enforced && !c().matches}>
                     {" "}
-                    In sandbox mode Payaza returns a test name for every account, so the account was
-                    saved anyway. Live mode enforces the match.
+                    In sandbox mode the check may return a test name, so the account was saved
+                    anyway. Live mode enforces the match.
                   </Show>
                 </Notice>
               )}
@@ -409,7 +402,7 @@ export default function PayoutAccounts() {
               </Show>
               <button type="submit" disabled={busy()} class={BUTTON_PRIMARY}>
                 {busy()
-                  ? "Checking with Payaza…"
+                  ? "Checking the account…"
                   : editing()
                     ? "Check name and update"
                     : "Check name and add"}

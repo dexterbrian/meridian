@@ -165,7 +165,7 @@ function BankDetails(props: { total: string }) {
 }
 
 // The demo fills in a well-known test card and locks the fields, so nobody types
-// or autofills a real card. The live build hands card entry to Payaza's checkout.
+// or autofills a real card. No live provider takes card details in our form.
 const DEMO_CARD = { number: "4242 4242 4242 4242", expiry: "12/34", cvv: "123" };
 const DEMO_CARD_CLASS = `${INPUT_CLASS} cursor-not-allowed bg-secondary/60 font-mono tracking-wider`;
 

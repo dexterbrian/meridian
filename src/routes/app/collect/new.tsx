@@ -49,7 +49,7 @@ export default function NewRequest() {
     amount: string;
     invoice: string | null;
   } | null>(null);
-  // Only currencies the business can be paid out in: Payaza doesn't convert.
+  // Only currencies the business has a payout account in: it is paid in the request's currency.
   const currencies = () => requestableCurrencies(accounts() ?? [], CURRENCY_CODES);
   const [picked, setPicked] = createSignal<Currency | null>(null);
   const cur = (): Currency => {
@@ -147,7 +147,7 @@ export default function NewRequest() {
                     payout account
                   </A>{" "}
                   first. You can request payment in the currencies you have payout accounts in,
-                  because Payaza pays out only in the currency your payer pays in.
+                  because that is the currency you are paid in.
                 </Notice>
               </div>
             }
@@ -185,8 +185,8 @@ export default function NewRequest() {
                     <A href="/app/settings/payout-accounts" class="underline">
                       payout accounts
                     </A>{" "}
-                    in. Your payer pays in this currency, and Payaza pays you out in it; it doesn't
-                    convert between currencies.
+                    in. You are paid in this currency. Your payer can pay in their own, and we
+                    convert it.
                   </p>
                   <Field
                     label="Your invoice number"

@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   klashaBeneficiaryBody,
   klashaQuote,
+  kotaniCryptoForPayout,
   kotaniNetwork,
-  kotaniCustomerBody,
-  kotaniDepositBody,
-  kotaniPayoutBody,
+  kotaniOfframpBody,
+  kotaniOnrampBody,
   kotaniQuote,
   yellowCardHeaders,
   yellowCardPaymentBody,
@@ -98,29 +98,44 @@ describe("quote parsers", () => {
     ).toBeNull();
   });
 
-  it("Kotani: payer pays amount plus deposit fee, recipient gets converted amount less withdrawal fee", () => {
+  // Kotani's own replies on 30 October 2026, for KES 129,000 paid from cedis.
+  const offramp = {
+    id: "rate-off",
+    value: "126.50625",
+    fiatAmount: 129000,
+    transactionAmount: 129000,
+    cryptoAmount: 1019.71,
+    fee: 82,
+    walletDebitAmount: 129082,
+  };
+
+  it("Kotani: the USDC an offramp needs covers its fee, rounded up", () => {
+    // 129,082 / 126.50625 = 1,020.3607, rounded up.
+    expect(kotaniCryptoForPayout(offramp)).toBe(1020.37);
+  });
+
+  it("Kotani: the payer pays the onramp price and fee; the recipient gets what the offramp settles", () => {
     const q = kotaniQuote({
-      from: "USD",
+      from: "GHS",
       to: "KES",
       basis: "documented",
-      reply: {
-        value: "130.5",
-        depositAmount: 100,
-        withdrawalAmount: 13050,
-        depositTransactionAmount: 102.5,
-        withdrawalTransactionAmount: 12720,
-        depositFee: 2.5,
-        withdrawalFee: 330,
+      offramp,
+      onramp: {
+        value: "11.9925",
+        fiatAmount: 12236.67,
+        transactionAmount: 12236.67,
+        cryptoAmount: 1020.36,
+        fee: 10,
       },
     });
-    expect(q).toMatchObject({ sendAmount: 102.5, receiveAmount: 12720, estimated: false });
+    expect(q).toMatchObject({ sendAmount: 12246.67, receiveAmount: 129000, estimated: false });
   });
 
   it("Kotani: a refusal shaped like a reply gives no quote, not NaN", () => {
     // Its sandbox answers {success: false, message, data: {}} when a service is
     // off, so the amounts arrive undefined.
     expect(
-      kotaniQuote({ from: "GHS", to: "KES", basis: "documented", reply: {} as never }),
+      kotaniQuote({ from: "GHS", to: "KES", basis: "documented", offramp, onramp: {} as never }),
     ).toBeNull();
   });
 
@@ -157,19 +172,49 @@ describe("payout bodies", () => {
     swiftCode: "ICBKCNBJ",
   };
 
-  it("Kotani: a bank payout carries the account itself, and needs no wallet", () => {
-    const { path, body } = kotaniPayoutBody(
-      { ...momo, rail: "bank", bankCode: "01" },
-      1000,
-      "MRDK-2",
-      "https://x/cb",
-    );
-    expect(path).toBe("/withdraw/v2/bank");
-    expect(body).toMatchObject({
-      currency: "KES",
-      amount: 1000,
-      bankDetails: { accountNumber: "254712345678", bankCode: "01" },
+  const ramp = {
+    chain: "STELLAR",
+    token: "USDC",
+    walletAddress: "GBWALLETADDRESS",
+    referenceId: "MRD-ABCDEFGH-1-P",
+    callbackUrl: "https://x/cb",
+  };
+
+  it("Kotani: an offramp pays mobile money straight to the recipient", () => {
+    const { path, body } = kotaniOfframpBody(momo, {
+      ...ramp,
+      cryptoAmount: 1020.36,
+      rateId: "r1",
     });
+    expect(path).toBe("/offramp");
+    expect(body).toMatchObject({
+      cryptoAmount: 1020.36,
+      currency: "KES",
+      senderAddress: "GBWALLETADDRESS",
+      rateId: "r1",
+      mobileMoneyReceiver: {
+        phoneNumber: "254712345678",
+        accountName: "Ann Flowers",
+        networkProvider: "MPESA",
+      },
+    });
+  });
+
+  it("Kotani: an offramp to a bank carries the account and a numeric bank code", () => {
+    const { body } = kotaniOfframpBody(
+      { ...momo, rail: "bank", accountNumber: "0123456789", bankCode: "01", address: "Nairobi" },
+      { ...ramp, cryptoAmount: 10 },
+    );
+    expect(body).toMatchObject({
+      bankReceiver: { accountNumber: "0123456789", bankCode: 1, country: "KE", address: "Nairobi" },
+    });
+    expect(body).not.toHaveProperty("mobileMoneyReceiver");
+  });
+
+  it("Kotani: refuses a payout it cannot make", () => {
+    expect(() =>
+      kotaniOfframpBody({ ...momo, rail: "wallet" }, { ...ramp, cryptoAmount: 1 }),
+    ).toThrow(/mobile money or a bank/);
   });
 
   it("Kotani: keeps Vodacom and Vodafone apart", () => {
@@ -180,57 +225,30 @@ describe("payout bodies", () => {
     expect(kotaniNetwork("Wave")).toBe("WAVE");
   });
 
-  it("Kotani: taking a payment asks the payer's phone, from Meridian's wallet", () => {
-    const { path, body } = kotaniDepositBody({
-      customerKey: "cus_123",
-      amount: 1500,
-      walletId: "wal_kes",
+  it("Kotani: an onramp prompts the payer's phone and sends the USDC to our wallet", () => {
+    const { path, body } = kotaniOnrampBody({
+      ...ramp,
+      referenceId: "MRD-ABCDEFGH-1",
+      amount: 12370,
+      currency: "GHS",
+      phoneNumber: "233244123456",
+      accountName: "Kwame Mensah",
+      network: "MTN",
+    });
+    expect(path).toBe("/onramp");
+    expect(body).toEqual({
+      fiatAmount: 12370,
+      currency: "GHS",
+      chain: "STELLAR",
+      token: "USDC",
+      receiverAddress: "GBWALLETADDRESS",
       referenceId: "MRD-ABCDEFGH-1",
       callbackUrl: "https://x/cb",
-    });
-    expect(path).toBe("/deposit/mobile-money");
-    // The names Kotani's own validation asked for: snake_case on a deposit.
-    expect(body).toMatchObject({
-      customer_key: "cus_123",
-      amount: 1500,
-      wallet_id: "wal_kes",
-      reference_id: "MRD-ABCDEFGH-1",
-    });
-  });
-
-  it("Kotani: a mobile money payout names the customer and the wallet", () => {
-    const { path, body } = kotaniPayoutBody(momo, 129000, "MRD-ABCDEFGH-1-P", "https://x/cb", {
-      customerKey: "cus_456",
-      walletId: "wal_kes",
-    });
-    expect(path).toBe("/withdraw/mobile-money");
-    // A withdrawal spells the wallet camelCase. Kotani's naming, not ours.
-    expect(body).toMatchObject({
-      customer_key: "cus_456",
-      amount: 129000,
-      walletId: "wal_kes",
-      referenceId: "MRD-ABCDEFGH-1-P",
-    });
-  });
-
-  it("Kotani: a mobile money payout without a wallet is refused, not sent", () => {
-    expect(() => kotaniPayoutBody(momo, 1, "r", "https://x/cb")).toThrow(/customer and a wallet/);
-  });
-
-  it("Kotani: a customer carries the network name Kotani uses", () => {
-    const { path, body } = kotaniCustomerBody({
-      country: "KE",
-      phoneNumber: "254712345678",
-      network: "M-Pesa",
-      accountName: "Hans Müller",
-    });
-    expect(path).toBe("/customer/mobile-money");
-    // The spec's names, snake_case. Camel case was rejected by Kotani.
-    expect(body).toEqual({
-      phone_number: "254712345678",
-      country_code: "KE",
-      network: "MPESA",
-      account_name: "Hans Müller",
+      mobileMoney: {
+        phoneNumber: "233244123456",
+        accountName: "Kwame Mensah",
+        providerNetwork: "MTN",
+      },
     });
   });
 

@@ -112,6 +112,16 @@ export async function saveRecipient(
         iban: r.iban.replace(/\s/g, ""),
         address: r.address,
         email: r.email,
+        ...(r.country === "CN"
+          ? {
+              cn_registered_name: r.cn_registered_name,
+              cn_business_id: r.cn_business_id,
+              cn_mobile: r.cn_mobile.replace(/\s/g, ""),
+              cn_city: r.cn_city,
+              cn_state: r.cn_state,
+              cn_postcode: r.cn_postcode,
+            }
+          : {}),
       },
     })
     .select()

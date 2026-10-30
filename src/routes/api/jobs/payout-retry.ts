@@ -1,7 +1,6 @@
 import type { APIEvent } from "@solidjs/start/server";
-import { timingSafeEqual } from "~/lib/payaza-webhook";
+import { timingSafeEqual } from "~/lib/partner-webhooks";
 import { env } from "~/server/env";
-import { runPayoutRetry } from "~/server/money/collect";
 import { runRoutedChecks } from "~/server/money/routed";
 
 // /api/jobs/payout-retry (TRD 11). Hit by a cron every 10 minutes with
@@ -16,9 +15,8 @@ async function run(event: APIEvent) {
     return new Response("Unauthorized", { status: 401 });
   }
   try {
-    const result = await runPayoutRetry();
-    const routed = await runRoutedChecks();
-    return new Response(JSON.stringify({ ok: true, ...result, routed }), {
+    const result = await runRoutedChecks();
+    return new Response(JSON.stringify({ ok: true, ...result }), {
       headers: { "Content-Type": "application/json" },
     });
   } catch (e) {

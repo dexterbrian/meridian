@@ -82,6 +82,10 @@ export function estimateFor(p: ProviderId, from: Endpoint, to: Endpoint): Estima
       return { feePct: 0.01, fixedUsd: 0, spreadPct: !fx ? 0 : usdSide ? 0.0087 : 0.0174 };
     case "klasha":
       return { feePct: 0.0275, fixedUsd: 27.5, spreadPct: fx ? 0.01 : 0 };
+    case "passpoint":
+      // No published fee schedule. Its docs' example (NGN 1,500 for USD 0.97 at
+      // 1,550.24) implies about 1.3% over mid, so assume 1% fee and 1.5% spread.
+      return { feePct: 0.01, fixedUsd: 0, spreadPct: fx ? 0.015 : 0 };
   }
 }
 

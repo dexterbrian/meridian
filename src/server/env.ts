@@ -43,31 +43,6 @@ export const env = {
     return read("JOBS_SECRET");
   },
 
-  // Payaza. The public key authenticates API calls (base64, "Payaza" prefix) and
-  // is the merchant_key for Web Checkout. The secret key only signs webhooks and
-  // never leaves the server.
-  get payazaPublicKey() {
-    return requireEnv("PAYAZA_PUBLIC_KEY");
-  },
-  get payazaSecretKey() {
-    return requireEnv("PAYAZA_SECRET_KEY");
-  },
-  get payazaBaseUrl() {
-    return (read("PAYAZA_BASE_URL") ?? "https://api.payaza.africa/live").replace(/\/+$/, "");
-  },
-  /** 6-digit PIN that authorises Transfers. Server only, never logged. */
-  get payazaTransactionPin() {
-    return read("PAYAZA_TRANSACTION_PIN");
-  },
-  /**
-   * Sandbox only. Payaza's test merchant has no payout float, so Transfers cannot
-   * succeed there. With this on, a payout is marked settled without calling Payaza
-   * and the timeline says so. Ignored in live mode.
-   */
-  get payazaSimulatePayouts() {
-    return this.mode === "sandbox" && read("PAYAZA_SIMULATE_PAYOUTS") === "true";
-  },
-
   // Routed providers (src/lib/providers.ts). A provider without its keys gives
   // sandbox estimates and simulated execution in sandbox mode, and is skipped in live.
   get kotani() {
@@ -89,18 +64,14 @@ export const env = {
       : null;
   },
   /**
-   * Kotani holds Meridian's money in a wallet per currency, and both taking a
-   * payment in and paying one out name that wallet. Set as
-   * KOTANI_WALLETS="KES:abc123,GHS:def456"; a currency with no wallet cannot be
-   * carried by Kotani at all, and the payer is told so.
+   * The chain and stablecoin Kotani settles on between the onramp and the
+   * offramp. Never shown to a payer or a recipient. USDC on Stellar unless set.
    */
-  kotaniWallet(currency: string): string | null {
-    const raw = read("KOTANI_WALLETS") ?? "";
-    for (const part of raw.split(",")) {
-      const [code, id] = part.split(":");
-      if (code?.trim().toUpperCase() === currency.toUpperCase() && id?.trim()) return id.trim();
-    }
-    return read(`KOTANI_WALLET_${currency.toUpperCase()}`) ?? null;
+  get kotaniChain() {
+    return read("KOTANI_CHAIN") ?? "STELLAR";
+  },
+  get kotaniToken() {
+    return read("KOTANI_TOKEN") ?? "USDC";
   },
   get yellowcard() {
     const apiKey = read("YELLOWCARD_API_KEY");
@@ -142,6 +113,35 @@ export const env = {
     // The key pair's secret is what signs Kotani's webhooks, unless the
     // dashboard issued a separate webhook secret.
     return read("KOTANI_WEBHOOK_SECRET") ?? read("KOTANI_PAY_SECRET_KEY");
+  },
+  /**
+   * Passpoint. The merchant id and API key buy a short-lived token; the two
+   * "contexts" are path parts Passpoint gives each merchant at onboarding.
+   */
+  get passpoint() {
+    const merchantId = read("PASSPOINT_MERCHANT_ID");
+    const apiKey = read("PASSPOINT_API_KEY");
+    // Given at onboarding; the docs show no default for it.
+    const userAppContext = read("PASSPOINT_USER_APP_CONTEXT");
+    return merchantId && apiKey && userAppContext
+      ? {
+          merchantId,
+          apiKey,
+          baseUrl: (read("PASSPOINT_BASE_URL") ?? "https://dev.mypasspoint.com").replace(
+            /\/+$/,
+            "",
+          ),
+          userAppContext,
+          // "paypass" is the context in the docs' own collection example.
+          paymentContext: read("PASSPOINT_PAYMENT_CONTEXT") ?? "paypass",
+          channelId: read("PASSPOINT_CHANNEL_ID") ?? "3",
+          channelCode: read("PASSPOINT_CHANNEL_CODE") ?? "legacy-api-user",
+        }
+      : null;
+  },
+  /** Klasha's merchant business id (dashboard, Settings, API keys). The CNY payout path needs it. */
+  get klashaBusinessId() {
+    return read("KLASHA_BUSINESS_ID");
   },
   /** Klasha doesn't sign webhooks, so the URL we give it carries this token. */
   get klashaWebhookToken() {

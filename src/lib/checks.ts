@@ -30,7 +30,7 @@ export function strongestAction(hits: CheckHit[]): CheckAction {
   return hits.reduce<CheckAction>((a, h) => (RANK[h.action] > RANK[a] ? h.action : a), "none");
 }
 
-/** Run before a payment attempt starts. A block here means Payaza is never called. */
+/** Run before a payment attempt starts. A block here means no provider is called. */
 export function checksBeforeCharge(input: {
   payerCountry: string | null | undefined;
   usdEquivalent: number;
@@ -97,98 +97,6 @@ export function checksBeforeTransfer(input: {
     });
   }
   return hits;
-}
-
-/**
- * Run when Payaza confirms a payment. The money is already collected, so the
- * only actions left are hold (wait for an admin) or none.
- */
-export function checksOnCollected(input: {
-  /** What we asked Payaza to charge. */
-  expectedTotal: number;
-  /** What Payaza says arrived. Null when the webhook did not say. */
-  amountReceived: number | null;
-  currency: string;
-  reportedCurrency: string | null;
-  /** State of the payment request at the time of the webhook. */
-  request: { status: string; usage: string; paidCount: number };
-  /**
-   * Our fee schedule vs Payaza's reported fee. Payaza has no endpoint that quotes
-   * a fee before payment, so the schedule is the only way to show the payer the
-   * fee up front; this check is how a wrong schedule gets noticed.
-   */
-  expectedPartnerFee: number;
-  reportedPartnerFee: number | null;
-  /** Payaza's sandbox charges no fees and reports 0, which says nothing about the schedule. */
-  sandbox?: boolean;
-}): CheckHit[] {
-  const hits: CheckHit[] = [];
-
-  if (
-    input.amountReceived !== null &&
-    Math.abs(input.amountReceived - input.expectedTotal) >= 0.01
-  ) {
-    hits.push({
-      rule: "H_AMOUNT_MISMATCH",
-      severity: "high",
-      action: "hold",
-      evidence: { expected: input.expectedTotal, received: input.amountReceived },
-      message: "The amount Payaza received differs from the amount charged.",
-    });
-  }
-
-  if (input.reportedCurrency && input.reportedCurrency !== input.currency) {
-    hits.push({
-      rule: "H_CURRENCY_MISMATCH",
-      severity: "high",
-      action: "hold",
-      evidence: { expected: input.currency, reported: input.reportedCurrency },
-      message: "The payment arrived in a different currency from the request.",
-    });
-  }
-
-  const alreadyPaid = input.request.usage === "single" && input.request.paidCount > 0;
-  if (input.request.status !== "active" || alreadyPaid) {
-    hits.push({
-      rule: "H_REQUEST_NOT_OPEN",
-      severity: "high",
-      action: "hold",
-      evidence: { requestStatus: input.request.status, paidCount: input.request.paidCount },
-      message: "This request was already paid or closed. The payment needs a refund decision.",
-    });
-  }
-
-  const sandboxZeroFee = input.sandbox === true && input.reportedPartnerFee === 0;
-  if (
-    input.reportedPartnerFee !== null &&
-    !sandboxZeroFee &&
-    Math.abs(input.reportedPartnerFee - input.expectedPartnerFee) > 0.01
-  ) {
-    hits.push({
-      rule: "H_FEE_MISMATCH",
-      severity: "low",
-      action: "none",
-      evidence: { expected: input.expectedPartnerFee, reported: input.reportedPartnerFee },
-      message: "Payaza's fee differs from our schedule. Review the fee table.",
-    });
-  }
-
-  return hits;
-}
-
-/** Minutes a bank transfer may still land after a virtual account's stated expiry. */
-export const VIRTUAL_ACCOUNT_GRACE_MINUTES = 5;
-
-/**
- * Whether an unpaid dynamic virtual account has lapsed. Payaza never reports a
- * "Failed" status for these; an unpaid account just expires, so we decide by the
- * clock, with a short grace for a transfer already in flight.
- */
-export function virtualAccountLapsed(expiresAt: string | null, now = Date.now()): boolean {
-  if (!expiresAt) return false;
-  const t = Date.parse(expiresAt);
-  if (Number.isNaN(t)) return false;
-  return now > t + VIRTUAL_ACCOUNT_GRACE_MINUTES * 60_000;
 }
 
 /**

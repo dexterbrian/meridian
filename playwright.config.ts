@@ -51,6 +51,10 @@ export default defineConfig({
       KLASHA_PASSWORD: "",
       KLASHA_PUBLIC_KEY: "",
       KLASHA_ENCRYPTION_KEY: "",
+      KLASHA_BUSINESS_ID: "",
+      PASSPOINT_MERCHANT_ID: "",
+      PASSPOINT_API_KEY: "",
+      PASSPOINT_USER_APP_CONTEXT: "",
     },
   },
 });

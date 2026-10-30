@@ -5,7 +5,7 @@ import { namesMatch } from "~/lib/checks";
 import { toCsv } from "~/lib/csv";
 import type { Tables } from "~/lib/database.types";
 import { CURRENCY_CODES, formatMoney, isCurrency, type Currency } from "~/lib/fees";
-import { COUNTRY_NAMES, ISO3, findNetwork } from "~/lib/payaza-codes";
+import { COUNTRY_NAMES, businessCountries, findNetwork } from "~/lib/countries";
 import { makeReference } from "~/lib/reference";
 import { expiryFrom, requestEditRules, requestableCurrencies } from "~/lib/request-edit";
 import {
@@ -23,7 +23,7 @@ import { currentViewer } from "./auth";
 import { sendEmail } from "./email/send";
 import { paymentRequestEmail } from "./email/templates";
 import { env } from "./env";
-import * as payaza from "./partners/payaza";
+import { checkPayoutAccount } from "./partners/account-check";
 import { RATE_LIMITED, allowRequest, requestOrigin } from "./request";
 import { supabaseAdmin } from "./supabase";
 
@@ -121,7 +121,7 @@ export async function listPayoutAccounts(): Promise<PayoutAccount[]> {
   return data ?? [];
 }
 
-/** True when Meridian talks to Payaza's sandbox, where name checks return a canned name. */
+/** True in sandbox mode, where providers' name checks may return canned names. */
 export async function isSandbox(): Promise<boolean> {
   return env.mode === "sandbox";
 }
@@ -129,14 +129,14 @@ export async function isSandbox(): Promise<boolean> {
 export type NameCheck = {
   resolvedName: string | null;
   matches: boolean;
-  /** In sandbox Payaza returns a canned name, so a mismatch is a warning, not a stop. */
+  /** In sandbox a provider may return a canned name, so a mismatch is a warning, not a stop. */
   enforced: boolean;
 };
 
 /**
- * Hackathon check: the payout account's name must match the business (Payaza
- * account name enquiry). Payaza's sandbox returns the same canned name for any
- * input, so in sandbox mode a mismatch is recorded and shown, not enforced.
+ * The payout account's name must match the business. Kotani's account check
+ * says whose account it is. In sandbox mode a mismatch is recorded and shown,
+ * not enforced, because test accounts carry test names.
  */
 export async function savePayoutAccount(
   input: PayoutAccountInput,
@@ -146,8 +146,8 @@ export async function savePayoutAccount(
   if (!allowRequest("business")) return { ok: false, error: RATE_LIMITED };
   const business = await requireBusiness();
   const d = parsed.data;
-  if (!(d.country in ISO3))
-    return { ok: false, error: "Payaza does not pay out to that country yet." };
+  if (!businessCountries().includes(d.country))
+    return { ok: false, error: "We can't pay out to that country yet." };
 
   // Editing: the account must be the caller's, and its currency stays fixed,
   // because payments already heading to it are in that currency.
@@ -173,22 +173,24 @@ export async function savePayoutAccount(
       return { ok: false, error: "Pick a mobile money network for that currency." };
   }
 
-  const enquiry = await payaza.accountNameEnquiry({
-    currency: d.currency,
-    bankCode: d.bank_code,
+  const enquiry = await checkPayoutAccount({
+    method: d.method,
+    country: d.country,
     accountNumber: d.account_number,
+    bankCode: d.bank_code,
+    expectedName: d.account_name,
   });
-  const resolvedName = enquiry.data?.response_content?.account_name ?? null;
+  const resolvedName = enquiry.resolvedName;
   const enforced = env.mode === "live";
   const matches =
     resolvedName !== null &&
     (namesMatch(business.name, resolvedName) ||
       namesMatch(business.trading_name ?? "", resolvedName) ||
       namesMatch(d.account_name, resolvedName));
-  if (enforced && !resolvedName) {
+  if (enforced && (!enquiry.valid || !resolvedName)) {
     return {
       ok: false,
-      error: `Payaza could not find that account (${enquiry.data?.response_message ?? "no answer"}). Check the number and try again.`,
+      error: `We could not find that account (${enquiry.message ?? "no answer"}). Check the number and try again.`,
     };
   }
   if (enforced && !matches) {
@@ -208,7 +210,7 @@ export async function savePayoutAccount(
       account_number: d.account_number,
       account_name: d.account_name,
     },
-    partner: "payaza",
+    partner: "kotani",
     validated: matches,
     validated_name: resolvedName,
   };
@@ -271,9 +273,9 @@ export type RequestRow = PaymentRequest & {
 };
 
 /**
- * Why a business can't request payment in a currency, or null if it can. Payaza
- * pays out only in the currency collected, so the business must hold a payout
- * account in it (requestableCurrencies).
+ * Why a business can't request payment in a currency, or null if it can. The
+ * business is paid in the request's currency, so it must hold a payout account
+ * in it (requestableCurrencies).
  */
 async function unpayableCurrency(businessId: string, currency: string): Promise<string | null> {
   const { data } = await db()
@@ -284,7 +286,7 @@ async function unpayableCurrency(businessId: string, currency: string): Promise<
   if (allowed.includes(currency as Currency)) return null;
   if (allowed.length === 0)
     return "Add a payout account first. You can request payment in the currencies you have payout accounts in.";
-  return `You can't be paid out in ${currency}: Payaza pays out only in the currency the payer pays in, and you have no ${currency} payout account. Request ${allowed.join(" or ")}, or add a ${currency} payout account.`;
+  return `You can't be paid out in ${currency}: you have no ${currency} payout account. Request ${allowed.join(" or ")}, or add a ${currency} payout account.`;
 }
 
 export async function createPaymentRequest(

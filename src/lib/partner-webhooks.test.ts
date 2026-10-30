@@ -53,7 +53,7 @@ describe("Yellow Card webhook", () => {
 
 describe("Kotani webhook", () => {
   const body = {
-    event: "transaction.withdrawal.status.updated",
+    event: "transaction.offramp.status.updated",
     data: { referenceId: "MRDT-ABCDEFGH-P", status: "SUCCESSFUL", id: "kt-9" },
   };
 
@@ -65,18 +65,7 @@ describe("Kotani webhook", () => {
     ).toBe(false);
   });
 
-  it("ignores an event that is neither money in nor money out", () => {
-    // Meridian takes ordinary money in and pays ordinary money out, so a crypto
-    // offramp event is not ours to act on.
-    expect(
-      parseKotaniWebhook({
-        event: "transaction.offramp.status.updated",
-        data: { referenceId: "MRD-ABCDEFGH-1", status: "SUCCESSFUL" },
-      }),
-    ).toBeNull();
-  });
-
-  it("reads withdrawals as payouts (camelCase) and deposits as payins (snake_case)", () => {
+  it("reads an offramp as the payout, and ignores events that are neither in nor out", () => {
     expect(parseKotaniWebhook(body)).toMatchObject({
       reference: "MRDT-ABCDEFGH-P",
       stage: "payout",
@@ -84,53 +73,65 @@ describe("Kotani webhook", () => {
       partnerRef: "kt-9",
     });
     expect(
+      parseKotaniWebhook({ event: "kyc.status.changed", data: { status: "SUCCESSFUL" } }),
+    ).toBeNull();
+  });
+
+  it("counts an onramp as money in only once the USDC reaches our wallet", () => {
+    const onramp = (depositStatus: string, onchainStatus: string) =>
       parseKotaniWebhook({
-        event: "transaction.deposit.status.updated",
-        data: { reference_id: "MRD-ABCDEFGH-2", status: "FAILED" },
-      }),
-    ).toMatchObject({ stage: "payin", outcome: "failed" });
+        event: "transaction.onramp.status.updated",
+        data: { referenceId: "MRD-ABCDEFGH-2", depositStatus, onchainStatus },
+      });
+    // The payer has paid, but the USDC is still on its way: not yet.
+    expect(onramp("SUCCESSFUL", "PENDING")).toMatchObject({ stage: "payin", outcome: "pending" });
+    expect(onramp("SUCCESSFUL", "SUCCESSFUL")).toMatchObject({ outcome: "success" });
+    expect(onramp("FAILED", "PENDING")).toMatchObject({ outcome: "failed" });
+    // Each stage of the same onramp is its own event, so a later one isn't a repeat.
+    expect(onramp("SUCCESSFUL", "PENDING")!.key).not.toBe(onramp("SUCCESSFUL", "SUCCESSFUL")!.key);
   });
 
   it("treats a reversal or an error as a failure, and a review as still waiting", () => {
-    const withdraw = (status: string) =>
+    const offramp = (status: string) =>
       parseKotaniWebhook({
-        event: "transaction.withdraw.status.updated",
+        event: "transaction.offramp.status.updated",
         data: { referenceId: "MRDT-ABCDEFGH-P", status },
       })?.outcome;
-    expect(withdraw("REVERSED")).toBe("failed");
-    expect(withdraw("ERROR_OCCURRED")).toBe("failed");
-    expect(withdraw("TRANSACTION_RETRY_FAILED")).toBe("failed");
-    expect(withdraw("REQUIRE_REVIEW")).toBe("pending");
-    expect(withdraw("TRANSACTION_RETRY")).toBe("pending");
+    expect(offramp("REVERSED")).toBe("failed");
+    expect(offramp("ERROR_OCCURRED")).toBe("failed");
+    expect(offramp("TRANSACTION_RETRY_FAILED")).toBe("failed");
+    expect(offramp("REQUIRE_REVIEW")).toBe("pending");
+    expect(offramp("TRANSACTION_RETRY")).toBe("pending");
   });
 });
 
 describe("Kotani status check", () => {
-  it("reads a deposit's status the way it reads the webhook", () => {
-    // The shape of GET /deposit/mobile-money/status/{reference_id} in Kotani's spec.
+  it("reads an onramp's status the way it reads the webhook", () => {
+    // The shape of GET /onramp/{referenceId} in Kotani's spec.
     expect(
       kotaniStatusEvent("payin", "MRD-ABCDEFGH-2", {
-        id: "dep-77",
-        reference_id: "MRD-ABCDEFGH-2",
-        status: "SUCCESSFUL",
-        amount: 1500,
+        referenceId: "MRD-ABCDEFGH-2",
+        depositStatus: "SUCCESSFUL",
+        onchainStatus: "SUCCESSFUL",
+        transactionHash: "0xabc",
+        cryptoAmount: 1020.37,
       }),
     ).toEqual({
       provider: "kotani",
       reference: "MRD-ABCDEFGH-2",
-      partnerRef: "dep-77",
+      partnerRef: "0xabc",
       stage: "payin",
       outcome: "success",
-      key: "kotani:MRD-ABCDEFGH-2:status:payin:SUCCESSFUL",
+      key: "kotani:MRD-ABCDEFGH-2:status:payin:SUCCESSFUL/SUCCESSFUL",
       reason: null,
     });
   });
 
-  it("carries a failed withdrawal's reason, and ignores a reply with no status", () => {
+  it("carries a failed offramp's reason, and ignores a reply with no status", () => {
     expect(
       kotaniStatusEvent("payout", "MRDT-ABCDEFGH-P", {
         status: "FAILED",
-        errorMessage: "Recipient wallet is not registered",
+        transactionError: { message: "Recipient wallet is not registered" },
       }),
     ).toMatchObject({ outcome: "failed", reason: "Recipient wallet is not registered" });
     expect(kotaniStatusEvent("payout", "MRDT-ABCDEFGH-P", {})).toBeNull();

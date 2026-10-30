@@ -6,7 +6,7 @@ import { For, Show, Suspense } from "solid-js";
 import { Timeline, TransactionBadge } from "~/components/status";
 import { getAdminTransaction } from "~/server/admin-actions";
 
-// One transaction with everything we know: fields, events, flags and every Payaza call.
+// One transaction with everything we know: fields, events, flags and every provider call.
 const load = query((id: string) => getAdminTransaction(id), "admin-transaction");
 
 export const route = {
@@ -105,7 +105,7 @@ export default function AdminTransaction() {
               </section>
 
               <section class="mt-8">
-                <h2 class="font-semibold">Payaza calls ({d().calls.length})</h2>
+                <h2 class="font-semibold">Provider calls ({d().calls.length})</h2>
                 <div class="mt-2 space-y-2">
                   <For
                     each={d().calls}

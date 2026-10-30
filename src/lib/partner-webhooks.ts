@@ -11,9 +11,19 @@
 //    event is only matched against a payout reference Klasha gave us.
 
 import type { ProviderId } from "./providers";
-import { timingSafeEqual } from "./payaza-webhook";
 
 const enc = new TextEncoder();
+
+/** Constant-time string compare so a mismatch cannot be found byte by byte. */
+export function timingSafeEqual(a: string, b: string): boolean {
+  const ab = enc.encode(a);
+  const bb = enc.encode(b);
+  let diff = ab.length ^ bb.length;
+  for (let i = 0; i < Math.max(ab.length, bb.length); i++) {
+    diff |= (ab[i % ab.length] ?? 0) ^ (bb[i % bb.length] ?? 0);
+  }
+  return diff === 0;
+}
 
 async function hmacSha256(secret: string, message: string): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey(
@@ -111,33 +121,64 @@ function kotaniOutcome(status: string | null): RoutedEvent["outcome"] {
   return outcomeOf(status);
 }
 
+/**
+ * An onramp has two legs: the payer's mobile money arriving, then the USDC
+ * reaching our wallet. It is done only when the USDC has landed, because the
+ * offramp spends it. Either leg failing fails it. An offramp's status is the
+ * recipient's payout.
+ */
+function kotaniRampOutcome(stage: RoutedEvent["stage"], d: Record<string, unknown>) {
+  const status = str(d["status"]);
+  if (stage === "payout") return { status, outcome: kotaniOutcome(status) };
+  const deposit = str(d["depositStatus"]) ?? str(d["deposit_status"]);
+  const onchain = str(d["onchainStatus"]) ?? str(d["onchain_status"]);
+  if (!deposit && !onchain) return { status, outcome: kotaniOutcome(status) };
+  const legs = [deposit, onchain].map(kotaniOutcome);
+  const outcome: RoutedEvent["outcome"] = legs.includes("failed")
+    ? "failed"
+    : kotaniOutcome(onchain) === "success"
+      ? "success"
+      : "pending";
+  return { status: `${deposit ?? "-"}/${onchain ?? "-"}`, outcome };
+}
+
+function kotaniReason(d: Record<string, unknown>): string | null {
+  const nested = (v: unknown) =>
+    v && typeof v === "object" ? str((v as Record<string, unknown>)["message"]) : str(v);
+  return (
+    nested(d["transactionError"]) ??
+    nested(d["onchainError"]) ??
+    nested(d["error"]) ??
+    str(d["errorMessage"]) ??
+    str(d["message"])
+  );
+}
+
+/** Kotani webhooks: an onramp is money in, an offramp is money out. Nothing else is ours. */
 export function parseKotaniWebhook(body: unknown): RoutedEvent | null {
   const b = (body ?? {}) as Record<string, unknown>;
   const event = str(b["event"]);
   const d = (b["data"] ?? {}) as Record<string, unknown>;
   if (!event) return null;
-  // Deposit payloads are snake_case and withdrawal payloads camelCase (Kotani docs).
-  // Money in is a deposit; money out is a withdrawal.
-  const stage = event.includes("deposit") ? "payin" : event.includes("withdraw") ? "payout" : null;
+  const stage = /\.onramp\./.test(event) ? "payin" : /\.offramp\./.test(event) ? "payout" : null;
   if (!stage) return null;
-  const status = str(d["status"]);
-  const reference = str(d["reference_id"]) ?? str(d["referenceId"]) ?? str(d["reference"]);
+  const { status, outcome } = kotaniRampOutcome(stage, d);
+  const reference = str(d["referenceId"]) ?? str(d["reference_id"]) ?? str(d["reference"]);
   return {
     provider: "kotani",
     reference,
-    partnerRef: str(d["id"]) ?? str(d["transaction_id"]) ?? str(d["transactionId"]),
+    partnerRef: str(d["id"]) ?? str(d["transactionHash"]),
     stage,
-    outcome: kotaniOutcome(status),
+    outcome,
     key: `kotani:${reference}:${event}:${status}`,
-    reason: str(d["message"]) ?? str(d["error_message"]) ?? str(d["errorMessage"]),
+    reason: outcome === "failed" ? kotaniReason(d) : null,
   };
 }
 
 /**
- * What Kotani says when we ask about a payment ourselves, in case its webhook
- * never reached us. The reply's data is the deposit or withdrawal record, so
- * it reads like a webhook's data. Keyed by status: asking twice and hearing the
- * same answer changes nothing.
+ * What Kotani says when we ask about an onramp or offramp ourselves, in case
+ * its webhook never reached us. The reply's data reads like a webhook's data.
+ * Keyed by status: asking twice and hearing the same answer changes nothing.
  */
 export function kotaniStatusEvent(
   stage: RoutedEvent["stage"],
@@ -145,20 +186,36 @@ export function kotaniStatusEvent(
   data: unknown,
 ): RoutedEvent | null {
   const d = (data ?? {}) as Record<string, unknown>;
-  const status = str(d["status"]);
+  const { status, outcome } = kotaniRampOutcome(stage, d);
   if (!status) return null;
   return {
     provider: "kotani",
     reference,
-    partnerRef: str(d["id"]),
+    partnerRef: str(d["id"]) ?? str(d["transactionHash"]),
     stage,
-    outcome: kotaniOutcome(status),
+    outcome,
     key: `kotani:${reference}:status:${stage}:${status}`,
-    reason:
-      str(d["errorMessage"]) ??
-      str(d["transactionError"]) ??
-      str(d["transaction_error"]) ??
-      str(d["message"]),
+    reason: outcome === "failed" ? kotaniReason(d) : null,
+  };
+}
+
+/**
+ * Passpoint's transfer status (GET .../ft-app/transfer-status). Its docs show
+ * "pending" when a transfer starts and "SUCCESSFUL" when done. Passpoint signs
+ * webhooks with HMAC-SHA512 but doesn't document how, so we ask instead.
+ */
+export function passpointStatusEvent(reference: string, data: unknown): RoutedEvent | null {
+  const d = (data ?? {}) as Record<string, unknown>;
+  const status = str(d["status"]);
+  if (!status) return null;
+  return {
+    provider: "passpoint",
+    reference,
+    partnerRef: str(d["transactionId"]),
+    stage: "payout",
+    outcome: outcomeOf(status),
+    key: `passpoint:${reference}:status:${status}`,
+    reason: str(d["responseMessage"]) ?? str(d["message"]),
   };
 }
 

@@ -4,7 +4,7 @@ import { For, Show, Suspense, createSignal } from "solid-js";
 
 import { BUTTON_PRIMARY, Field, INPUT_CLASS, SELECT_CLASS } from "~/components/ui/field";
 import { toast } from "~/components/ui/toast";
-import { BUSINESS_COUNTRIES, COUNTRY_NAMES } from "~/lib/payaza-codes";
+import { COUNTRY_NAMES, businessCountries } from "~/lib/countries";
 import { businessProfileSchema } from "~/lib/schemas";
 import { getMyBusiness, saveBusinessProfile } from "~/server/business-actions";
 
@@ -94,7 +94,7 @@ export default function Onboarding() {
               label="Country"
               for="country"
               error={errors()["country"]}
-              hint="Where the business is registered. Payaza pays out to these markets."
+              hint="Where the business is registered. We can pay you out in these countries."
             >
               <select
                 id="country"
@@ -103,7 +103,7 @@ export default function Onboarding() {
                 class={SELECT_CLASS}
                 value={business()?.country ?? "KE"}
               >
-                <For each={BUSINESS_COUNTRIES}>
+                <For each={businessCountries()}>
                   {(c) => (
                     <option value={c} selected={(business()?.country ?? "KE") === c}>
                       {COUNTRY_NAMES[c] ?? c}

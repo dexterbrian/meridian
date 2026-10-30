@@ -121,6 +121,16 @@ export function recipientFromRow(r: RecipientRow): Recipient {
     iban: d["iban"],
     address: d["address"],
     email: d["email"],
+    china: d["cn_registered_name"]
+      ? {
+          registeredName: d["cn_registered_name"],
+          businessIdNumber: d["cn_business_id"] ?? "",
+          mobile: d["cn_mobile"] ?? "",
+          city: d["cn_city"] ?? "",
+          state: d["cn_state"] ?? "",
+          postcode: d["cn_postcode"] ?? "",
+        }
+      : undefined,
   };
 }
 
@@ -154,6 +164,7 @@ async function openWithFallback(
       ADAPTERS[q.provider].collect({
         quote: q,
         amount: (q as PricedQuote).price.total,
+        owner: tx.business_id,
         rail,
         reference: tx.reference,
         payoutTo,
@@ -564,6 +575,8 @@ export async function routedPayout(tx: Tx, source: EventSource): Promise<void> {
       recipient,
       reference: ref,
       transactionId: tx.id,
+      owner: tx.business_id,
+      sender: await senderOf(tx.business_id),
     });
     const paying = await transition(
       claimed,
@@ -589,6 +602,18 @@ export async function routedPayout(tx: Tx, source: EventSource): Promise<void> {
       { source, payload: { provider, error: message } },
     );
   }
+}
+
+/** The business as a bank abroad must name the sender. */
+async function senderOf(businessId: string) {
+  const b = await loadBusiness(businessId);
+  if (!b) return undefined;
+  return {
+    name: b.name,
+    address: b.address ?? "",
+    city: b.address?.split(",").pop()?.trim() ?? "",
+    country: b.country,
+  };
 }
 
 async function finish(tx: Tx, source: EventSource, simulated: boolean): Promise<void> {
@@ -627,6 +652,7 @@ export async function simulateRoutedPayin(transactionId: string): Promise<void> 
   });
 }
 
+/** Every payment is routed now. Rows from the retired Payaza flow are not, and are left alone. */
 export function isRouted(tx: Pick<Tx, "partner_in">): boolean {
   return !!tx.partner_in && tx.partner_in !== "payaza";
 }

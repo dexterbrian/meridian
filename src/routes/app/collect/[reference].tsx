@@ -30,7 +30,7 @@ import {
   type Currency,
   type PayMethod,
 } from "~/lib/fees";
-import { COUNTRY_NAMES } from "~/lib/payaza-codes";
+import { COUNTRY_NAMES } from "~/lib/countries";
 import { requestEditRules, requestableCurrencies } from "~/lib/request-edit";
 import { paymentRequestUpdateSchema } from "~/lib/schemas";
 import { isTerminal, type TransactionStatus } from "~/lib/status";
@@ -55,7 +55,7 @@ const when = (iso: string) =>
 /** Edit form for an active request. Amount, currency and usage lock once a payer starts. */
 function EditRequestForm(props: {
   request: PaymentRequest;
-  /** Currencies the business holds payout accounts in (Payaza does not convert). */
+  /** Currencies the business holds payout accounts in (the business is paid in the request's currency). */
   payoutCurrencies: Currency[];
   onDone: () => Promise<void>;
 }) {

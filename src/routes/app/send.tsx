@@ -438,6 +438,12 @@ function RecipientForm(props: {
       iban: s("iban"),
       address: s("address"),
       email: s("email"),
+      cn_registered_name: s("cn_registered_name"),
+      cn_business_id: s("cn_business_id"),
+      cn_mobile: s("cn_mobile"),
+      cn_city: s("cn_city"),
+      cn_state: s("cn_state"),
+      cn_postcode: s("cn_postcode"),
     });
     setBusy(false);
     if (!res.ok) {
@@ -550,6 +556,53 @@ function RecipientForm(props: {
             class={INPUT_CLASS}
             placeholder="Recipient's address (needed for international wires)"
           />
+        </Show>
+        {/* A Chinese bank wants the company as registered there, in Chinese. */}
+        <Show when={country() === "CN"}>
+          <input
+            name="cn_registered_name"
+            aria-label="Registered name in Chinese"
+            class={INPUT_CLASS}
+            placeholder="Company's registered name, in Chinese"
+            required
+          />
+          <div class="grid gap-3 sm:grid-cols-2">
+            <input
+              name="cn_business_id"
+              aria-label="Unified social credit code"
+              class={INPUT_CLASS}
+              placeholder="Unified social credit code (18 characters)"
+              required
+            />
+            <input
+              name="cn_mobile"
+              aria-label="Company mobile"
+              class={INPUT_CLASS}
+              placeholder="Mobile, e.g. +8613816932352"
+              required
+            />
+            <input
+              name="cn_city"
+              aria-label="City"
+              class={INPUT_CLASS}
+              placeholder="City"
+              required
+            />
+            <input
+              name="cn_state"
+              aria-label="Province"
+              class={INPUT_CLASS}
+              placeholder="Province"
+              required
+            />
+            <input
+              name="cn_postcode"
+              aria-label="Postcode"
+              class={INPUT_CLASS}
+              placeholder="Postcode"
+              required
+            />
+          </div>
         </Show>
       </Show>
       <input

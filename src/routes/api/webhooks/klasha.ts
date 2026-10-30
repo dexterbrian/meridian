@@ -1,5 +1,5 @@
 import type { APIEvent } from "@solidjs/start/server";
-import { timingSafeEqual } from "~/lib/payaza-webhook";
+import { timingSafeEqual } from "~/lib/partner-webhooks";
 import { parseKlashaWebhook } from "~/lib/partner-webhooks";
 import { env } from "~/server/env";
 import { answer, json, parseJson } from "~/server/partners/routed-webhook";

@@ -35,9 +35,8 @@ export function requestEditRules(r: EditableRequest): EditRules {
 
 /**
  * Currencies a business may request payment in: the ones it holds a payout
- * account in. Payaza pays out only in the currency a payment was collected in
- * (Payaza, 29 September 2026: no conversion for payouts, transfers or split
- * settlement), so a request in any other currency could be paid but never paid out.
+ * account in. The business is paid in the request's currency, so a request in a
+ * currency it has no account in could be paid but never paid out.
  * Returned in the order of `all` (the app's currency list), without repeats.
  */
 export function requestableCurrencies<C extends string>(

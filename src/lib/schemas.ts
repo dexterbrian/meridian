@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { CURRENCY_CODES, PAYOUT_CURRENCIES, type Currency } from "./fees";
-import { BUSINESS_COUNTRIES, ISO3 } from "./payaza-codes";
+import { COUNTRY_NAMES, businessCountries } from "./countries";
 import { REFERENCE_PATTERN } from "./reference";
 
 // Shared between the browser (early checks) and server functions (the real check).
@@ -80,7 +80,10 @@ export const demoSettleSchema = z.object({
 export const businessProfileSchema = z.object({
   name: text(200).min(2, "Enter the business name"),
   trading_name: optionalText(200),
-  country: iso2.refine((c) => BUSINESS_COUNTRIES.includes(c), "Pick a country Payaza pays out to"),
+  country: iso2.refine(
+    (c) => businessCountries().includes(c),
+    "Pick a country we can pay you out in",
+  ),
   registration_number: optionalText(64),
   tax_number: optionalText(64),
   address: optionalText(500),
@@ -97,7 +100,7 @@ export const payoutAccountSchema = z
     /** Set when editing an existing account. */
     id: z.uuid().optional(),
     currency: z.enum(PAYOUT_CURRENCIES as [Currency, ...Currency[]]),
-    country: iso2.refine((c) => c in ISO3, "Pick a country"),
+    country: iso2.refine((c) => c in COUNTRY_NAMES, "Pick a country"),
     method: z.enum(["bank", "momo"]),
     /** Network code for mobile money, bank code for bank accounts. */
     bank_code: text(32).min(1, "Pick the network or bank"),
@@ -137,26 +140,6 @@ export const paymentRequestUpdateSchema = z.object({
 export type PaymentRequestUpdateInput = z.input<typeof paymentRequestUpdateSchema>;
 
 /* -------------------------------- pay page -------------------------------- */
-
-export const startPaymentSchema = z.object({
-  reference: referenceSchema,
-  method,
-  payer_name: text(200).min(2, "Enter your name"),
-  payer_email: z.email("Enter a valid email").max(254),
-  payer_phone: optionalText(32),
-  payer_country: iso2,
-  /** Mobile money network code, e.g. SAFKEN. Required for mobile money. */
-  network: optionalText(16),
-});
-export type StartPaymentInput = z.input<typeof startPaymentSchema>;
-
-export const xofOtpSchema = z.object({
-  transaction_id: z.uuid(),
-  otp: z
-    .string()
-    .trim()
-    .regex(/^\d{4,8}$/, "Enter the code from the SMS"),
-});
 
 /* ---------------------------------- admin --------------------------------- */
 
@@ -217,7 +200,30 @@ export const recipientSchema = z
       .union([z.email("Enter a valid email").max(254), z.literal("")])
       .optional()
       .default(""),
+    // A company in China (Klasha's CNY payout).
+    cn_registered_name: optionalText(200),
+    cn_business_id: optionalText(32),
+    cn_mobile: optionalText(20),
+    cn_city: optionalText(80),
+    cn_state: optionalText(80),
+    cn_postcode: optionalText(12),
   })
+  .refine(
+    (r) =>
+      r.country !== "CN" ||
+      r.method !== "bank" ||
+      (r.cn_registered_name !== "" &&
+        /^[0-9A-Z]{18}$/.test(r.cn_business_id) &&
+        /^\+86\d{11}$/.test(r.cn_mobile.replace(/\s/g, "")) &&
+        r.cn_city !== "" &&
+        r.cn_state !== "" &&
+        r.address !== ""),
+    {
+      message:
+        "A company in China needs its Chinese registered name, its 18-character credit code, a +86 mobile and its address",
+      path: ["cn_registered_name"],
+    },
+  )
   .refine((r) => r.method !== "momo" || /^\+?\d{9,15}$/.test(r.account_number.replace(/\s/g, "")), {
     message: "Enter the mobile money number with the country code",
     path: ["account_number"],

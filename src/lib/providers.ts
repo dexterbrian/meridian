@@ -13,7 +13,7 @@
 // live list: Kotani GET /country, Yellow Card GET /channels, Klasha currency
 // coverage).
 
-export type ProviderId = "kotani" | "yellowcard" | "klasha";
+export type ProviderId = "kotani" | "yellowcard" | "klasha" | "passpoint";
 
 /**
  * How money moves on one side of a payment.
@@ -70,17 +70,18 @@ export const PROVIDERS: ProviderProfile[] = [
   {
     id: "kotani",
     name: "Kotani Pay",
-    // POST /rate/fiat quotes fiat-to-fiat with a fee on each leg; offramp turns USDC/USDT into fiat.
+    // An onramp turns the payer's money into USDC, an offramp turns it into the
+    // recipient's money. Each is priced by its own rate call.
     converts: true,
     docs: "https://documentation.kotanipay.com/v3/overview",
     // Countries read from Kotani's own GET /customer/support/countries on
     // 13 October 2026 (each listed for both deposit and withdraw), so these are
     // documented, not guessed. Nigeria is not among them: Kotani does not
     // collect or pay NGN.
-    // Money in is mobile money only. Kotani's bank and card deposits go through
-    // a hosted checkout page we have not built, so offering them would fail.
-    // Money out by bank is South Africa only: its spec says bank payouts
-    // "currently only support SA banks".
+    // Money in is mobile money only. Kotani's card and bank checkout is a
+    // hosted page we have not built, so offering it would fail.
+    // Money out by bank: its offramp lists Kenyan banks (by bank code) and
+    // South African banks (by name).
     collect: [
       cov("KES", ["KE"], ["momo"]), cov("GHS", ["GH"], ["momo"]),
       cov("UGX", ["UG"], ["momo"]), cov("TZS", ["TZ"], ["momo"]),
@@ -90,7 +91,7 @@ export const PROVIDERS: ProviderProfile[] = [
       cov("ZAR", ["ZA"], ["momo"]),
     ],
     payout: [
-      cov("KES", ["KE"], ["momo"]), cov("GHS", ["GH"], ["momo"]),
+      cov("KES", ["KE"], ["momo", "bank"]), cov("GHS", ["GH"], ["momo"]),
       cov("UGX", ["UG"], ["momo"]), cov("TZS", ["TZ"], ["momo"]),
       cov("ZMW", ["ZM"], ["momo"]), cov("RWF", ["RW"], ["momo"]),
       cov("XOF", ["CI", "SN"], ["momo"]), cov("XAF", ["CM"], ["momo"]),
@@ -141,8 +142,10 @@ export const PROVIDERS: ProviderProfile[] = [
       cov("CDF", ["CD"], ["momo"]), cov("RWF", ["RW"], ["momo"]), cov("SLE", ["SL"], ["momo", "bank"]),
     ],
     payout: [
-      // Klasha Wire currency coverage, plus CNY to Chinese wallets.
-      cov("CNY", ["CN"], ["bank", "wallet"]), cov("JPY", ["JP"], ["bank"]),
+      // Klasha Wire currency coverage. CNY goes through Klasha's China payout to
+      // a company bank account; its Alipay and WeChat payouts are person to
+      // person only, so not for a business paying a supplier.
+      cov("CNY", ["CN"], ["bank"]), cov("JPY", ["JP"], ["bank"]),
       cov("EUR", ["AT", "BE", "CH"], ["bank"]), cov("GBP", ["GB", "BE", "CH"], ["bank"]),
       cov("USD", ["US", "AO", "AU", "AT", "BE", "CA", "CN", "GH", "HK", "IN", "KE", "NG", "SL", "ZA", "CH", "TZ", "TR", "UG", "AE", "GB", "ZM"], ["bank"]),
       cov("HKD", ["HK"], ["bank"]), cov("INR", ["IN"], ["bank"]), cov("AED", ["AE"], ["bank"]),
@@ -151,6 +154,24 @@ export const PROVIDERS: ProviderProfile[] = [
       cov("KES", ["KE"], ["bank"]), cov("NGN", ["NG"], ["bank"]), cov("GHS", ["GH"], ["bank"]),
       cov("ZAR", ["ZA"], ["bank"]), cov("TZS", ["TZ"], ["bank"]), cov("UGX", ["UG"], ["bank"]),
       cov("ZMW", ["ZM"], ["bank"]), cov("ETB", ["ET"], ["bank"]),
+    ],
+  },
+  {
+    id: "passpoint",
+    name: "Passpoint",
+    // Cross-border transfer from Meridian's Passpoint wallet: the rate is
+    // applied when the transfer starts (docs.dev.mypasspoint.com/transfer).
+    converts: true,
+    docs: "https://docs.dev.mypasspoint.com/transfer",
+    // Its transfer API pays banks abroad over SWIFT, wire, ACH or open banking.
+    // Its coverage page (mypasspoint.com/payment-coverage) lists USD in the US,
+    // EUR across SEPA and GBP in the UK. It also lists African mobile money and
+    // collections, but those use other endpoints we have not built.
+    collect: [],
+    payout: [
+      cov("USD", ["US"], ["bank"]),
+      cov("EUR", [...EUR_SEPA, "BG", "DK", "EE", "FI", "IS", "LT", "NO", "PL"], ["bank"]),
+      cov("GBP", ["GB"], ["bank"]),
     ],
   },
 ];

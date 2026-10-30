@@ -56,7 +56,7 @@ export default function AppLayout(props: RouteSectionProps) {
         <div class="min-h-screen">
           <Show when={sandbox()}>
             <DemoBanner>
-              Sandbox. Payments run through Payaza's test environment. No real money moves.
+              Sandbox. Payments run through providers' test environments. No real money moves.
             </DemoBanner>
           </Show>
           <header class="border-b border-border/70 px-5 py-4">
